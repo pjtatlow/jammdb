@@ -1,0 +1,13 @@
+[package]
+name = "jammdb"
+version = "0.1.0"
+authors = ["PJ Tatlow <pjtatlow@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+"memmap" = "0.7.0"
+page_size = "0.4.2"
+fs2 = "0.4.3"
+sha3 = "0.8"
