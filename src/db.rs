@@ -74,7 +74,7 @@ impl DBInner {
 }
 
 fn init_file(file: &mut File, pagesize: usize) -> Result<()> {
-	file.allocate((pagesize * 64) as u64)?;
+	file.allocate((pagesize * 2000) as u64)?;
 	let mut buf = vec![0; pagesize * 4];
 	
 	let mut get_page = |index: usize| {

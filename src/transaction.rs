@@ -37,7 +37,7 @@ impl<'a> Transaction<'a> {
 	}
 
 	pub fn commit(&mut self) -> Result<()> {
-		self.inner.rebalance();
+		self.inner.rebalance()?;
 		self.inner.write_data(&mut self.file)
 	}
 

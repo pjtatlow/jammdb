@@ -4,7 +4,7 @@ use std::fs::File;
 use std::pin::Pin;
 
 use crate::page::{Page, PageID, PageType};
-use crate::node::{Node, NodeID, NodeData};
+use crate::node::{Node, NodeID, NodeData, Branch};
 use crate::transaction::TransactionInner;
 use crate::ptr::Ptr;
 use crate::cursor::{Cursor, PageNode, PageNodeID};
@@ -153,7 +153,7 @@ impl Bucket {
 		}
 	}
 
-	pub fn put<T: AsRef<[u8]>>(&mut self, key: T, value: T) {
+	pub fn put<T: AsRef<[u8]>, S: AsRef<[u8]>>(&mut self, key: T, value: S) {
 		self.dirty = true;
 		let mut c = self.cursor();
 		let key = key.as_ref();
@@ -210,9 +210,13 @@ impl Bucket {
 			b.rebalance()?;
 		};
 		if self.dirty {
-			let root_node = self.node(self.root);
+			let mut root_node = self.node(self.root);
 			root_node.merge();
-			root_node.split();
+			while let Some(mut branches) = root_node.split() {
+				branches.insert(0, Branch::from_node(root_node));
+				root_node = self.new_node(NodeData::Branches(branches));
+			}
+			self.meta.root_page = root_node.page_id;
 		}
 		Ok(())
 	}
@@ -222,8 +226,9 @@ impl Bucket {
 			b.write(file)?;
 		};
 		if self.dirty {
-			let page_id = self.node(self.root).write(file)?;
-			self.meta.root_page = page_id;
+			for node in self.nodes.iter_mut() {
+				node.write(file)?;
+			}
 		}
 		Ok(())
 	}

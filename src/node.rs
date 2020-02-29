@@ -22,13 +22,13 @@ const FILL_PERCENT: f32 = 0.5;
 pub (crate) struct Node {
 	pub (crate) id: NodeID,
 	pub (crate) page_id: PageID,
+	pub (crate) num_pages: usize,
 	bucket: Ptr<Bucket>,
 	// pub (crate) key: SliceParts,
 	pub (crate) parent: Option<PageNodeID>,
 	pub (crate) children: Vec<NodeID>,
 	pub (crate) data: NodeData,
 	unbalanced: bool,
-	spilled: bool,
 }
 
 pub (crate) enum NodeData {
@@ -73,12 +73,6 @@ impl NodeData {
 		}		
 	}
 
-	fn split_up(&mut self, indexes: Vec<usize>) -> Vec<NodeData> {
-		let mut data = Vec::<NodeData>::new();
-		let iter = indexes.iter().rev().map(|i| self.split_at(*i));
-		data
-	}
-
 	fn page_type(&self) -> PageType {
 		match self {
 			NodeData::Branches(_) => Page::TYPE_BRANCH,
@@ -94,6 +88,13 @@ pub (crate) struct Branch {
 }
 
 impl Branch {
+	pub (crate) fn from_node(node: &Node) -> Branch {
+		Branch{
+			key: node.data.key_parts(),
+			page: node.page_id,
+		}
+	}
+
 	pub (crate) fn key(&self) -> &[u8] {
 		self.key.slice()
 	}
@@ -124,12 +125,12 @@ impl Node {
 		Node{
 			id,
 			page_id: 0,
+			num_pages: 0,
 			bucket: b,
 			parent: None,
 			children: Vec::new(),
 			data,
 			unbalanced: false,
-			spilled: false,
 		}		
 	}
 
@@ -137,12 +138,12 @@ impl Node {
 		Node{
 			id,
 			page_id: 0,
+			num_pages: 0,
 			bucket: b,
 			parent: None,
 			children: Vec::new(),
 			data,
 			unbalanced: false,
-			spilled: false,
 		}
 	}
 
@@ -166,20 +167,18 @@ impl Node {
 				NodeData::Leaves(data)
 			},
 			_ => {
-				// println!("PAGE_TYPE: {}", p.page_type);
 				panic!("INVALID PAGE TYPE FOR FROM_PAGE")
 			},
 		};
-		// println!("DATA: {:?} PAGE_ID: {}", data.len(), p.id);
 		Node{
 			id,
 			page_id: p.id,
+			num_pages: 0,
 			bucket: b,
 			parent: None,
 			children: Vec::new(),
 			data,
 			unbalanced: false,
-			spilled: false,
 		}
 	}
 
@@ -225,48 +224,50 @@ impl Node {
 		HEADER_SIZE + self.data.size()
 	}
 	
-	pub (crate) fn write(&mut self, file: &mut File) -> Result<PageID> {
-		for node_id in self.children.iter() {
-			let node = self.bucket.node(PageNodeID::Node(*node_id));
-			let page_id = node.write(file)?;
-			if let NodeData::Branches(branches) = &mut self.data {
-				let key = node.data.key_parts();
-				let key = key.slice();
-				match branches.binary_search_by_key(&key, |b| b.key()) {
-					Ok(i) => branches[i].page = page_id,
-					Err(_) => panic!("NOOOO"),
-				}
-			}
-		};
+	pub (crate) fn write(&mut self, file: &mut File) -> Result<()> {
 		let size = self.size();
-		// TODO release old page
-		let (page_id, num_pages) = self.bucket.tx.allocate(size);
-		self.page_id = page_id;
 		let mut buf: Vec<u8> = vec![0; size];
 		let page = unsafe {&mut *(&mut buf[0] as *mut u8 as *mut Page)};
-		page.write_node(self, num_pages)?;
-		let offset = (page_id as u64) * (self.bucket.tx.meta.pagesize as u64);
+		page.write_node(self, self.num_pages)?;
+		let offset = (self.page_id as u64) * (self.bucket.tx.meta.pagesize as u64);
 		// println!("WRITING PAGE: {:?} at {}", page, offset);
 		file.write_all_at(buf.as_slice(), offset)?;
-		Ok(self.page_id)
+		Ok(())
 	}
 
 	pub (crate) fn merge(&mut self) {
 		
 	}
 
-	pub (crate) fn split(&mut self) {
-		let mut i = 0;
-		let mut len = self.children.len();
-		while i < len {
-			let child = self.bucket.node(PageNodeID::Node(self.children[i]));
-			child.split();
-			i += 1;
-			// len can change from the child splitting
-			len = self.children.len();
+	fn allocate(&mut self) {
+		// TODO release old page
+		let size = self.size();
+		let (page_id, num_pages) = self.bucket.tx.allocate(size);
+		self.page_id = page_id;
+		self.num_pages = num_pages;
+	}
+
+	pub (crate) fn split(&mut self) -> Option<Vec<Branch>> {
+		let mut last_branch_index = 0;
+		for child in self.children.iter() {
+			let child = self.bucket.node(PageNodeID::Node(*child));
+			let new_branches = child.split();
+			if  let NodeData::Branches(branches) = &mut self.data {
+				match &branches[last_branch_index..].binary_search_by_key(&child.data.key_parts().slice(), |b| b.key()) {
+					Ok(i) => last_branch_index = *i,
+					Err(_) => panic!("THIS IS VERY VERY BAD"),
+				}
+				branches[last_branch_index].page = child.page_id;
+				if let Some(mut new_branches) = new_branches {
+					let mut right_side = branches.split_off(last_branch_index + 1);
+					branches.append(&mut new_branches);
+					branches.append(&mut right_side);
+				}
+			}
 		}
 		if self.data.len() <= (MIN_KEYS_PER_NODE * 2) || self.size() < self.bucket.tx.db.pagesize {
-			return;
+			self.allocate();
+			return None;
 		}
 		let threshold = ((self.bucket.tx.db.pagesize as f32) * FILL_PERCENT) as usize;
 		let mut split_indexes = Vec::<usize>::new();
@@ -280,15 +281,17 @@ impl Node {
 					let new_size = current_size + size;
 					if count >= MIN_KEYS_PER_NODE && new_size > threshold {
 						split_indexes.push(i);
-						current_size = HEADER_SIZE;
+						current_size = HEADER_SIZE + size;
 						count = 0;
+					} else {
+						current_size = new_size;
 					}
 				}
 			},
 			NodeData::Leaves(leaves) => {
 				for (i, l) in leaves.iter().enumerate() {
 					count += 1;
-					let size = BRANCH_SIZE + l.size();
+					let size = LEAF_SIZE + l.size();
 					let new_size = current_size + size;
 					if count >= MIN_KEYS_PER_NODE && new_size > threshold {
 						split_indexes.push(i);
@@ -302,34 +305,24 @@ impl Node {
 		};
 		// for some reason we didn't find a place to split
 		if split_indexes.len() == 0 {
-			return;
+			self.allocate();
+			return None;
 		}
+
+		let new_data: Vec<NodeData> = split_indexes.iter()
+			// split from the end so we only break off small chunks at a time
+			.rev()
+			// split the data
+			.map(|i| self.data.split_at(*i))
+			.collect();
 		
-		// create a new root node
-
-		if self.parent.is_none() {
-			let parent = self.bucket.new_node(NodeData::Branches(Vec::new()));
-			parent.insert_branch(self.id, self.data.key_parts());
-			self.parent = Some(PageNodeID::Node(parent.id));
-			self.bucket.root = PageNodeID::Node(parent.id);
-		}
-
-		let new_data: Vec<NodeData> = split_indexes.iter().rev().map(|i| self.data.split_at(*i)).collect();
 		
-		let mut b = Ptr::new(self.bucket.deref());
+		self.allocate();
 
-		for data in new_data {
-			let id: PageID;
-			let key = data.key_parts();
-			{
-				let n = b.new_node(data);
-				n.parent = self.parent;
-				id = n.id;
-			}
-			let parent = b.node(self.parent.unwrap());
-			parent.insert_branch(id, key);
-		}
-
-
+		Some(new_data.into_iter().rev().map(|data| {
+			let n = self.bucket.new_node(data);
+			n.allocate();
+			Branch::from_node(n)
+		}).collect())
 	}
 }

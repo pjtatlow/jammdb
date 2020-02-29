@@ -5,15 +5,15 @@ fn main() -> Result<(), Error> {
     {
         let db = DB::open("test.db")?;
         let mut tx = db.tx()?;
-        {
-            let b = tx.create_bucket("abc")?;
-            for i in 0..500 {
-                b.put(i.to_string(), i.to_string());
-            }
+        let b = tx.create_bucket(8888_u32.to_be_bytes())?;
+        for i in 0..=15000_u32 {
+            b.put(i.to_be_bytes(), i.to_string());
+        }
+        // {
             // b.put("FOO", "BAR");
             // b.put("BAR", "BAZ");
             // b.put("BAZ", "FOO");
-        }
+        // }
         // {
         //     let b = tx.create_bucket("def")?;
         //     b.put("123", "456");
@@ -24,7 +24,7 @@ fn main() -> Result<(), Error> {
         //     b2.put("901", "def");
         //     b2.put("234", "ghi");
         // }
-        // if let Some(data) = b.get("FOO") {
+        // if let Some(data) = b.get([0]) {
         //     if let Data::KeyValue(kv) = data {
         //         println!("KEY: {}", unsafe{std::str::from_utf8_unchecked(kv.key())});
         //         println!("VALUE: {}", unsafe{std::str::from_utf8_unchecked(kv.value())});
@@ -42,7 +42,7 @@ fn main() -> Result<(), Error> {
     {
         // let db = DB::open("test.db")?;
         // let mut tx = db.tx()?;
-        // for key in vec!["abc", "def"] {
+        // for key in vec!["abc"] {
         //     let b = tx.get_bucket(key)?;
         //     for data in b.cursor() {
         //         match data {

@@ -178,7 +178,7 @@ impl Cursor {
 			if elem.page_node.len() == 0 {
 				break;
 			}
-			let page_node = self.bucket.page_node(elem.page_node.index_page(0));
+			let page_node = self.bucket.page_node(elem.page_node.index_page(elem.index));
 			self.stack.push(Elem{index: 0, page_node});
 		}
 	}

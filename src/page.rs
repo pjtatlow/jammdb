@@ -99,6 +99,7 @@ impl Page {
 				data = Vec::with_capacity(self.count);
 				let elems = self.branch_elements_mut();
 				for (b, elem) in branches.iter().zip(elems.iter_mut()) {
+					debug_assert_ne!(b.page, 0), "PAGE SHOULD NOT BE ZERO!";
 					elem.page = b.page;
 					elem.key_size = b.key_size();
 					elem.pos = header_offsets + data_size;
@@ -147,7 +148,12 @@ impl Page {
 			Page::TYPE_BRANCH => {
 				for (i, elem) in self.branch_elements().iter().enumerate() {
 					let key = elem.key();
-					let elem_name = format!("\"Index: {}\\nPage: {}\\nKey: '{}'\"", i, self.id, std::str::from_utf8(key).unwrap());
+					let elem_name = if key.len() == 4 {
+						format!("\"Index: {}\\nPage: {}\\nKey: '{:?}'\"", i, self.id, as_u32_be(key))
+						// let elem_name = format!("\"Index: {}\\nPage: {}\\nKey: '{}'\"", i, self.id, std::str::from_utf8(key).unwrap());
+					} else {
+						format!("\"Index: {}\\nPage: {}\\nKey: '{}'\"", i, self.id, std::str::from_utf8(key).unwrap())
+					};
 					let page = tx.page(elem.page);
 					println!("{} [style=\"filled\", fillcolor=\"burlywood\"];", elem_name);
 					println!("{} -> {}", name, elem_name);
@@ -161,7 +167,8 @@ impl Page {
 						Node::TYPE_BUCKET => {
 							let parts = SliceParts::from_slice(elem.value());
 							let meta = unsafe{ *(parts.ptr as *const BucketMeta) };
-							let elem_name = format!("\"Index: {}\\nPage: {}\\nKey '{}'\\n {:?}\"", i, self.id, std::str::from_utf8(elem.key()).unwrap(), meta);
+							let elem_name = format!("\"Index: {}\\nPage: {}\\nKey '{:?}'\\n {:?}\"", i, self.id, as_u32_be(elem.key()), meta);
+							// let elem_name = format!("\"Index: {}\\nPage: {}\\nKey '{}'\\n {:?}\"", i, self.id, std::str::from_utf8(elem.key()).unwrap(), meta);
 							println!("{} [style=\"filled\", fillcolor=\"gray91\"];", elem_name);
 							println!("{} -> {}", name, elem_name);
 							let page = tx.page(meta.root_page);
@@ -169,7 +176,9 @@ impl Page {
 							page.print(tx);
 						},
 						Node::TYPE_DATA => {
-							let elem_name = format!("\"Index: {}\\nPage: {}\\nKey: '{}'\\nValue '{}'\"", i, self.id, std::str::from_utf8(elem.key()).unwrap(), std::str::from_utf8(elem.value()).unwrap());
+							return;
+							let elem_name = format!("\"Index: {}\\nPage: {}\\nKey: '{:?}'\\nValue '{}'\"", i, self.id, as_u32_be(elem.key()), std::str::from_utf8(elem.value()).unwrap());
+							// let elem_name = format!("\"Index: {}\\nPage: {}\\nKey: '{}'\\nValue '{}'\"", i, self.id, std::str::from_utf8(elem.key()).unwrap(), std::str::from_utf8(elem.value()).unwrap());
 							println!("{} [style=\"filled\", fillcolor=\"chartreuse\"];", elem_name);
 							println!("{} -> {}", name, elem_name);
 						},
@@ -177,14 +186,22 @@ impl Page {
 					}
 				}
 			},
-			_ => panic!("CANNOT WRITE NODE OF TYPE: {}", type_str(self.page_type)),
+			_ => panic!("CANNOT WRITE NODE OF TYPE {} from page {}", type_str(self.page_type), self.id),
 		}
 	}
 
 	pub fn name(&self) -> String {
-		format!("\"Page #{} ({})\"", self.id, type_str(self.page_type))
+		let size = 4096 + self.overflow * 4096;
+		format!("\"Page #{} ({}) ({} bytes)\"", self.id, type_str(self.page_type), size)
 	}
 
+}
+
+fn as_u32_be(array: &[u8]) -> u32 {
+    ((array[0] as u32) << 24) +
+    ((array[1] as u32) << 16) +
+    ((array[2] as u32) <<  8) +
+    ((array[3] as u32) <<  0)
 }
 
 fn type_str(pt: PageType) -> String {
@@ -244,7 +261,7 @@ impl LeafElement {
 		let pos = self.pos + self.key_size;
 		unsafe {
 			let start = self as *const LeafElement as *const u8;
-			let buf = std::slice::from_raw_parts(start, pos + self.key_size);
+			let buf = std::slice::from_raw_parts(start, pos + self.value_size);
 			// println!("LEAF VALUE: {}", std::str::from_utf8_unchecked(&buf[pos..]));
 			&buf[pos..]
 		}
