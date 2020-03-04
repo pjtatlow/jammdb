@@ -23,8 +23,8 @@ impl Data {
 
 	pub (crate) fn node_type(&self) -> NodeType {
 		match self {
-			Data::Bucket(b) => Node::TYPE_BUCKET,
-			Data::KeyValue(kv) => Node::TYPE_DATA,
+			Data::Bucket(_) => Node::TYPE_BUCKET,
+			Data::KeyValue(_) => Node::TYPE_DATA,
 		}		
 	}
 

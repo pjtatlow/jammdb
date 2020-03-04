@@ -1,5 +1,5 @@
 use std::pin::Pin;
-use std::sync::MutexGuard;
+use std::sync::{MutexGuard, RwLockReadGuard};
 use std::fs::File;
 use std::os::unix::fs::FileExt;
 
@@ -10,21 +10,26 @@ use crate::bucket::{Bucket};
 use crate::errors::Result;
 use crate::ptr::Ptr;
 use crate::data::SliceParts;
+use crate::errors::Error;
 
 pub struct Transaction<'a> {
 	inner: Pin<Box<TransactionInner>>,
-	file: MutexGuard<'a, File>,
+	file: Option<MutexGuard<'a, File>>,
+	#[allow(dead_code)]
+	mmap_lock: Option<RwLockReadGuard<'a, ()>>,
 }
 
 impl<'a> Transaction<'a> {
-	pub (crate) fn new(db: &'a DBInner) -> Result<Transaction<'a>> {
-		let file = db.file.lock()?;
-		let tx = TransactionInner::new(db)?;
+	pub (crate) fn new(db: &'a DBInner, writable: bool) -> Result<Transaction<'a>> {
+		let file = if writable { Some(db.file.lock()?) } else { None };
+		let mmap_lock = if writable { Some(db.mmap_lock.read()?) } else { None };
+		let tx = TransactionInner::new(db, writable)?;
 		let mut inner = Pin::new(Box::new(tx));
 		inner.init();
 		Ok(Transaction{
 			inner,
 			file,
+			mmap_lock,
 		})
 	}
 
@@ -37,8 +42,11 @@ impl<'a> Transaction<'a> {
 	}
 
 	pub fn commit(&mut self) -> Result<()> {
+		if !self.inner.writable {
+			return Err(Error::ReadOnlyTx);
+		}
 		self.inner.rebalance()?;
-		self.inner.write_data(&mut self.file)
+		self.inner.write_data(&mut self.file.as_mut().unwrap())
 	}
 
 	pub fn print_graph(&self) {
@@ -51,6 +59,7 @@ impl<'a> Transaction<'a> {
 pub (crate) struct TransactionInner {
 	pub (crate) db: Ptr<DBInner>,
 	pub (crate) meta: Meta,
+	pub (crate) writable: bool,
 	// _write_lock: std::sync::MutexGuard<, ()>,
 	root: Option<Bucket>,
 	buffers: Vec<Vec<u8>>,
@@ -59,7 +68,7 @@ pub (crate) struct TransactionInner {
 
 impl<'a> TransactionInner {
 
-	fn new(db: &DBInner) -> Result<TransactionInner> {
+	fn new(db: &DBInner, writable: bool) -> Result<TransactionInner> {
 		let _write_lock = db.write_lock.lock()?;
 		// let db2 = db.clone();
 		let meta: Meta = Page::from_buf(&db.data, 0, db.pagesize).meta().clone();
@@ -67,6 +76,7 @@ impl<'a> TransactionInner {
 		let tx = TransactionInner{
 			db: Ptr::new(db),
 			meta,
+			writable,
 			// _write_lock,
 			root: None,
 			buffers: Vec::new(),

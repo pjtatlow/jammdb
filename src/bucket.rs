@@ -1,9 +1,8 @@
 use std::collections::HashMap;
-use std::hash::Hasher;
 use std::fs::File;
 use std::pin::Pin;
 
-use crate::page::{Page, PageID, PageType};
+use crate::page::{Page, PageID};
 use crate::node::{Node, NodeID, NodeData, Branch};
 use crate::transaction::TransactionInner;
 use crate::ptr::Ptr;
@@ -110,6 +109,9 @@ impl Bucket {
 	}
 
 	pub fn create_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<&mut Bucket> {
+		if !self.tx.writable {
+			return Err(Error::ReadOnlyTx);
+		}
 		self.dirty = true;
 		let mut c = self.cursor();
 		let name = name.as_ref();
@@ -143,10 +145,14 @@ impl Bucket {
 		}
 	}
 
-	pub fn put<T: AsRef<[u8]>, S: AsRef<[u8]>>(&mut self, key: T, value: S) {
+	pub fn put<T: AsRef<[u8]>, S: AsRef<[u8]>>(&mut self, key: T, value: S) -> Result<()> {
+		if !self.tx.writable {
+			return Err(Error::ReadOnlyTx);
+		}
 		let k = self.tx.copy_data(key.as_ref());
 		let v = self.tx.copy_data(value.as_ref());
 		self.put_data(KVPair::from_slice_parts(k, v));
+		Ok(())
 	}
 
 	fn put_data(&mut self, data: Data) {

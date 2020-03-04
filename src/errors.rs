@@ -8,6 +8,7 @@ pub enum Error {
     BucketExists,
     BucketMissing,
     IncompatibleValue,
+    ReadOnlyTx,
     IOError(std::io::Error),
     SyncError(&'static str),
 }
@@ -18,6 +19,7 @@ impl StdError for Error {
             Error::BucketExists => "Bucket already exists",
             Error::BucketMissing => "Bucket does not exist",
             Error::IncompatibleValue => "Value not compatible",
+            Error::ReadOnlyTx => "Cannot write in a read-only transaction",
 			Error::IOError(e) => e.description(),
 			Error::SyncError(s) => s,
         }
@@ -30,6 +32,7 @@ impl fmt::Display for Error {
             Error::BucketExists => write!(f, "Bucket already exists"),
             Error::BucketMissing => write!(f, "Bucket does not exist"),
             Error::IncompatibleValue => write!(f, "Value not compatible"),
+            Error::ReadOnlyTx => write!(f, "Cannot write in a read-only transaction"),
 			Error::IOError(e) => write!(f, "IO Error: {}", e),
 			Error::SyncError(s) => write!(f, "Sync Error: {}", s),
         }

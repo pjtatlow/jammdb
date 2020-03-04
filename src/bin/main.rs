@@ -4,10 +4,10 @@ fn main() -> Result<(), Error> {
     std::fs::remove_file("test.db")?;
     {
         let db = DB::open("test.db")?;
-        let mut tx = db.tx()?;
+        let mut tx = db.tx(true)?;
         let b = tx.create_bucket("abc")?;
         for i in 0..=512_u32 {
-            b.put(i.to_be_bytes(), i.to_string());
+            b.put(i.to_be_bytes(), i.to_string())?;
         }
         tx.commit()?;
         tx.print_graph();

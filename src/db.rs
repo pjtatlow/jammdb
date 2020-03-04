@@ -1,15 +1,15 @@
-use std::sync::{Arc, Mutex, RwLock};
-use std::fs::{File, OpenOptions};
 use std::io::Write;
+use std::fs::{File, OpenOptions};
+use std::sync::{Arc, Mutex, RwLock};
 
+use fs2::FileExt;
 use memmap::Mmap;
 use page_size::{get as getPageSize};
-use fs2::FileExt;
 
-use crate::bucket::{BucketMeta};
-use crate::page::{Page, PageID};
-use crate::transaction::Transaction;
+use crate::page::{Page};
 use crate::errors::{Result};
+use crate::bucket::{BucketMeta};
+use crate::transaction::Transaction;
 
 const MAGIC_VALUE: u32 = 0xABCDEF;
 const VERSION: u32 = 1;
@@ -23,8 +23,8 @@ impl DB {
 		Ok(DB(Arc::new(db)))
 	}
 
-	pub fn tx(&self) -> Result<Transaction> {
-		Transaction::new(&self.0)
+	pub fn tx(&self, writable: bool) -> Result<Transaction> {
+		Transaction::new(&self.0, writable)
 	}
 }
 

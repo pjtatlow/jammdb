@@ -8,6 +8,7 @@ mod ptr;
 mod node;
 mod cursor;
 mod data;
+mod freelist;
 
 pub use db::DB;
 pub use transaction::Transaction;

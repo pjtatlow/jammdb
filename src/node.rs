@@ -1,8 +1,6 @@
 use std::fs::File;
 use std::mem::size_of;
-use std::io::Write;
 use std::os::unix::fs::FileExt;
-use std::ops::Deref;
 
 use crate::page::{Page, PageID, PageType, LeafElement, BranchElement};
 use crate::ptr::Ptr;
@@ -27,7 +25,6 @@ pub (crate) struct Node {
 	// pub (crate) key: SliceParts,
 	pub (crate) children: Vec<NodeID>,
 	pub (crate) data: NodeData,
-	unbalanced: bool,
 }
 
 pub (crate) enum NodeData {
@@ -50,13 +47,6 @@ impl NodeData {
 		}
 	}
 
-	fn element_size(&self) -> usize {
-		match self {
-			NodeData::Branches(_) => BRANCH_SIZE,
-			NodeData::Leaves(_) => LEAF_SIZE,
-		}		
-	}
-
 	pub (crate) fn key_parts(&self) -> SliceParts {
 		debug_assert!(self.len() > 0, "Cannot get key parts of empty data");
 		match self {
@@ -70,13 +60,6 @@ impl NodeData {
 			NodeData::Branches(b) => NodeData::Branches(b.split_off(index)),
 			NodeData::Leaves(l) => NodeData::Leaves(l.split_off(index)),
 		}		
-	}
-
-	fn page_type(&self) -> PageType {
-		match self {
-			NodeData::Branches(_) => Page::TYPE_BRANCH,
-			NodeData::Leaves(_) => Page::TYPE_LEAF,
-		}			
 	}
 
 }
@@ -128,7 +111,6 @@ impl Node {
 			bucket: b,
 			children: Vec::new(),
 			data,
-			unbalanced: false,
 		}		
 	}
 
@@ -140,7 +122,6 @@ impl Node {
 			bucket: b,
 			children: Vec::new(),
 			data,
-			unbalanced: false,
 		}
 	}
 
@@ -174,7 +155,6 @@ impl Node {
 			bucket: b,
 			children: Vec::new(),
 			data,
-			unbalanced: false,
 		}
 	}
 
