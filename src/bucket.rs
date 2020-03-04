@@ -87,25 +87,26 @@ impl Bucket {
 	pub fn get_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<&mut Bucket> {
 		let name = name.as_ref();
 		let key = Vec::from(name);
-		// if let Some(b) = self.buckets.get_mut(&key) {
-		// 	return Ok(b);
-		// }
-		let mut c = self.cursor();
-		c.seek(name);
-		match c.current() {
-			Some(data) => match data {
-				Data::Bucket(data) => {
-					let mut b = self.from_meta(data.meta());
-					b.meta = data.meta();
-					b.dirty = false;
-					// println!("NEW BUCKET META: {:?}", b.meta);
-					self.buckets.insert(key.clone(), Pin::new(Box::new(b)));
-					Ok(self.buckets.get_mut(&key).unwrap())
+		if !self.buckets.contains_key(&key) {
+			let mut c = self.cursor();
+			let exists = c.seek(name);
+			if !exists {
+				return Err(Error::BucketMissing);
+			}
+			match c.current() {
+				Some(data) => match data {
+					Data::Bucket(data) => {
+						let mut b = self.from_meta(data.meta());
+						b.meta = data.meta();
+						b.dirty = false;
+						self.buckets.insert(key.clone(), Pin::new(Box::new(b)));
+					},
+					_ => return Err(Error::IncompatibleValue),
 				},
-				_ => Err(Error::IncompatibleValue) 
-			},
-			None => Err(Error::BucketMissing)
+				None => return Err(Error::BucketMissing),
+			}
 		}
+		Ok(self.buckets.get_mut(&key).unwrap())
 	}
 
 	pub fn create_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<&mut Bucket> {
@@ -118,27 +119,16 @@ impl Bucket {
 		}
 		let key = Vec::from(name);
 		self.new_child(&key);
-		// TODO avoid cloning the key
-		// self.buckets.insert(key.clone(), Box::new(b));
+
 		let data;
 		{
 			let b = self.buckets.get(&key).unwrap();
 			let key = self.tx.copy_data(name);
 			data = BucketData::from_bucket(key, b);
-			// match &data {
-			// 	Data::Bucket(b) => println!("CREATED BUCKET: {:?}", b.meta()),
-			// 	_ => (),
-			// };
 		}
-		// if let Data::Bucket(p) = data {
-			// 	println!("OG META: {:?}", p.meta());
-			// 	b.meta.sequence = 2871348274;
-			// 	println!("NEW META: {:?}", p.meta());
-			// }
-		{
-			let node = self.node(c.current_id());
-			node.insert_data(data);
-		}
+
+		let node = self.node(c.current_id());
+		node.insert_data(data);
 		let b = self.buckets.get_mut(&key).unwrap();
 		Ok(b)
 	}
@@ -154,15 +144,17 @@ impl Bucket {
 	}
 
 	pub fn put<T: AsRef<[u8]>, S: AsRef<[u8]>>(&mut self, key: T, value: S) {
+		let k = self.tx.copy_data(key.as_ref());
+		let v = self.tx.copy_data(value.as_ref());
+		self.put_data(KVPair::from_slice_parts(k, v));
+	}
+
+	fn put_data(&mut self, data: Data) {
 		self.dirty = true;
 		let mut c = self.cursor();
-		let key = key.as_ref();
-		let value = value.as_ref();
-		c.seek(key);
-		let k = self.tx.copy_data(key);
-		let v = self.tx.copy_data(value);
+		c.seek(data.key());
 		let node = self.node(c.current_id());
-		node.insert_data(KVPair::from_slice_parts(k, v));
+		node.insert_data(data);
 	}
 
 	pub fn cursor(&self) -> Cursor {
@@ -191,13 +183,13 @@ impl Bucket {
 				debug_assert!(self.meta.root_page == page_id || self.page_parents.contains_key(&page_id));
 				let node_id = self.nodes.len();
 				self.page_node_ids.insert(page_id, node_id);
-				let mut n: Node = Node::from_page(node_id, Ptr::new(self), self.tx.page(page_id));
-				if self.meta.root_page != page_id {
-					let parent = self.node(PageNodeID::Page(self.page_parents[&page_id]));
-					parent.insert_branch(n.id, n.data.key_parts());
-					n.parent = Some(PageNodeID::Node(parent.id));
-				}
+				let n: Node = Node::from_page(node_id, Ptr::new(self), self.tx.page(page_id));
 				self.nodes.push(Box::new(n));
+				if self.meta.root_page != page_id {
+					let node_key = self.nodes[node_id].data.key_parts();
+					let parent = self.node(PageNodeID::Page(self.page_parents[&page_id]));
+					parent.insert_child(node_id, node_key);
+				}
 				node_id
 			},
 			PageNodeID::Node(id) => id,
@@ -205,10 +197,21 @@ impl Bucket {
 		self.nodes.get_mut(id).unwrap()
 	}
 
-	pub (crate) fn rebalance(&mut self) -> Result<()> {
-		for (_, b) in self.buckets.iter_mut() {
-			b.rebalance()?;
-		};
+	pub (crate) fn rebalance(&mut self) -> Result<BucketMeta> {
+		let mut bucket_metas = HashMap::new();
+		for (key, b) in self.buckets.iter_mut() {
+			if b.dirty {
+				self.dirty = true;
+				let bucket_meta = b.rebalance()?;
+				bucket_metas.insert(key.clone(), bucket_meta);
+			}
+		}
+		for (k, b) in bucket_metas {
+			let name = self.tx.copy_data(&k[..]);
+			let meta = self.tx.copy_data(b.as_ref());
+			self.put_data(BucketData::from_slice_parts(name, meta));
+		}
+		let mut root_id = self.root;
 		if self.dirty {
 			let mut root_node = self.node(self.root);
 			root_node.merge();
@@ -216,9 +219,11 @@ impl Bucket {
 				branches.insert(0, Branch::from_node(root_node));
 				root_node = self.new_node(NodeData::Branches(branches));
 			}
+			root_id = PageNodeID::Node(root_node.id);
 			self.meta.root_page = root_node.page_id;
 		}
-		Ok(())
+		self.root = root_id;
+		Ok(self.meta)
 	}
 
 	pub (crate) fn write(&mut self, file: &mut File) -> Result<()> {
@@ -239,18 +244,20 @@ impl Bucket {
 	}
 }
 
-// impl IntoIterator for Bucket {
-//     type Item = <Cursor as Iterator>::Item;
-//     type IntoIter = Cursor;
 
-//     fn into_iter(self) -> Self::IntoIter {
-//         self.cursor()
-//     }
-// }
+const META_SIZE: usize = std::mem::size_of::<BucketMeta>();
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
 pub (crate) struct BucketMeta {
 	pub (crate) root_page: PageID,
 	pub (crate) sequence: u64,
+}
+
+impl AsRef<[u8]> for BucketMeta {
+    #[inline]
+    fn as_ref(&self) -> &[u8] {
+		let ptr = self as *const BucketMeta as *const u8;
+		unsafe{ std::slice::from_raw_parts(ptr, META_SIZE) }
+    }
 }

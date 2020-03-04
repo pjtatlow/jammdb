@@ -87,14 +87,16 @@ impl<'a> TransactionInner {
 	}
 
 	pub (crate) fn get_bucket(&'a mut self, name: &[u8]) -> Result<&'a mut Bucket> {
-		if let Some(mut root) = self.root.as_mut() {
+		debug_assert!(self.root.is_some());
+		if let Some(root) = self.root.as_mut() {
 			return root.get_bucket(name);
 		}
 		panic!("");
 	}
 
 	pub (crate) fn create_bucket(&'a mut self, name: &[u8]) -> Result<&'a mut Bucket> {
-		if let Some(mut root) = self.root.as_mut() {
+		debug_assert!(self.root.is_some());
+		if let Some(root) = self.root.as_mut() {
 			return root.create_bucket(name);
 		}
 		panic!("");

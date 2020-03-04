@@ -1,9 +1,12 @@
+use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::cmp::{Ord, Ordering};
 
 use crate::bucket::{BucketMeta, Bucket};
 use crate::page::LeafElement;
 use crate::node::{Node, NodeType};
-#[derive(Clone)]
+
+#[derive(Clone, Debug)]
 pub enum Data {
 	Bucket(BucketData),
 	KeyValue(KVPair),
@@ -54,7 +57,7 @@ impl Data {
 	}	
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BucketData([SliceParts; 2]);
 
 impl BucketData {
@@ -65,6 +68,10 @@ impl BucketData {
 		]);
 		// println!("NEW BUCKET: {:?}", std::str::from_utf8(b.name()));
 		Data::Bucket(b)
+	}
+
+	pub (crate) fn from_slice_parts(key: SliceParts, meta: SliceParts) -> Data {
+		Data::Bucket(BucketData([key, meta]))
 	}
 
 	pub (crate) fn from_bucket(name: SliceParts, b: &Bucket) -> Data {
@@ -90,7 +97,7 @@ impl BucketData {
 	}
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct KVPair([SliceParts; 2]);
 
 impl KVPair {
@@ -168,3 +175,20 @@ impl PartialEq for SliceParts {
 }
 
 impl Eq for SliceParts {}
+
+impl Hash for SliceParts {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.slice().hash(state);
+    }
+}
+
+impl fmt::Debug for SliceParts {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "[ ")?;
+		for byte in self.slice() {
+			write!(f, "{} ", byte)?
+		}
+		write!(f, "]")?;
+		Ok(())
+    }
+}

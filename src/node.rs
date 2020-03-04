@@ -25,7 +25,6 @@ pub (crate) struct Node {
 	pub (crate) num_pages: usize,
 	bucket: Ptr<Bucket>,
 	// pub (crate) key: SliceParts,
-	pub (crate) parent: Option<PageNodeID>,
 	pub (crate) children: Vec<NodeID>,
 	pub (crate) data: NodeData,
 	unbalanced: bool,
@@ -127,7 +126,6 @@ impl Node {
 			page_id: 0,
 			num_pages: 0,
 			bucket: b,
-			parent: None,
 			children: Vec::new(),
 			data,
 			unbalanced: false,
@@ -140,7 +138,6 @@ impl Node {
 			page_id: 0,
 			num_pages: 0,
 			bucket: b,
-			parent: None,
 			children: Vec::new(),
 			data,
 			unbalanced: false,
@@ -175,7 +172,6 @@ impl Node {
 			page_id: p.id,
 			num_pages: 0,
 			bucket: b,
-			parent: None,
 			children: Vec::new(),
 			data,
 			unbalanced: false,
@@ -201,20 +197,12 @@ impl Node {
 		}
 	}
 
-	pub (crate) fn insert_branch(&mut self, id: NodeID, key: SliceParts) {
+	pub (crate) fn insert_child(&mut self, id: NodeID, key: SliceParts) {
 		match &mut self.data {
 			NodeData::Branches(branches) => {
-				let index = match branches.binary_search_by_key(&key.slice(), |b| &b.key()) {
-					Ok(i) => panic!("BRANCH ALREADY EXISTS"),
-					Err(i) => i,
-				};
-				branches.insert(index, Branch{
-					key,
-					page: 0,
-				});
+				debug_assert!(self.children.contains(&id) == false);
+				debug_assert!(branches.binary_search_by_key(&key.slice(), |b| &b.key()).is_ok());
 				self.children.push(id);
-				let mut b = Ptr::new(&self.bucket);
-				self.children.sort_by_cached_key(|id| b.node(PageNodeID::Node(*id)).data.key_parts())
 			},
 			NodeData::Leaves(_) => panic!("CANNOT INSERT BRANCH INTO A LEAF NODE"),
 		}
@@ -249,15 +237,18 @@ impl Node {
 
 	pub (crate) fn split(&mut self) -> Option<Vec<Branch>> {
 		let mut last_branch_index = 0;
+		// sort children so we iterate over them in order
+		let mut b = Ptr::new(&self.bucket);
+		self.children.sort_by_cached_key(|id| b.node(PageNodeID::Node(*id)).data.key_parts());
 		for child in self.children.iter() {
 			let child = self.bucket.node(PageNodeID::Node(*child));
 			let new_branches = child.split();
-			if  let NodeData::Branches(branches) = &mut self.data {
+			if let NodeData::Branches(branches) = &mut self.data {
 				match &branches[last_branch_index..].binary_search_by_key(&child.data.key_parts().slice(), |b| b.key()) {
 					Ok(i) => last_branch_index = *i,
 					Err(_) => panic!("THIS IS VERY VERY BAD"),
 				}
-				branches[last_branch_index].page = child.page_id;
+				branches[last_branch_index] = Branch::from_node(&child);
 				if let Some(mut new_branches) = new_branches {
 					let mut right_side = branches.split_off(last_branch_index + 1);
 					branches.append(&mut new_branches);
