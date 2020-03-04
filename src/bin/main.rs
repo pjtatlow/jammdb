@@ -6,7 +6,7 @@ fn main() -> Result<(), Error> {
         let db = DB::open("test.db")?;
         let mut tx = db.tx(true)?;
         let b = tx.create_bucket("abc")?;
-        for i in 0..=512_u32 {
+        for i in 0..=10000_u32 {
             b.put(i.to_be_bytes(), i.to_string())?;
         }
         tx.commit()?;

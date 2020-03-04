@@ -3,7 +3,7 @@ use std::sync::{MutexGuard, RwLockReadGuard};
 use std::fs::File;
 use std::os::unix::fs::FileExt;
 
-use crate::db::{DBInner};
+use crate::db::{DBInner, ALLOC_SIZE};
 use crate::meta::Meta;
 use crate::page::{Page, PageID};
 use crate::bucket::{Bucket};
@@ -22,7 +22,7 @@ pub struct Transaction<'a> {
 impl<'a> Transaction<'a> {
 	pub (crate) fn new(db: &'a DBInner, writable: bool) -> Result<Transaction<'a>> {
 		let file = if writable { Some(db.file.lock()?) } else { None };
-		let mmap_lock = if writable { Some(db.mmap_lock.read()?) } else { None };
+		let mmap_lock = if writable { None } else { Some(db.mmap_lock.read()?) };
 		let tx = TransactionInner::new(db, writable)?;
 		let mut inner = Pin::new(Box::new(tx));
 		inner.init();
@@ -132,6 +132,13 @@ impl<'a> TransactionInner {
 	}
 
 	fn write_data(&mut self, file: &mut File) -> Result<()> {
+		let required_size = (self.meta.num_pages * self.db.pagesize) as u64;
+		let current_size = file.metadata()?.len();
+		if current_size < required_size {
+			let size_diff = required_size - current_size;
+			let alloc_size = ((size_diff / ALLOC_SIZE) + 1) * ALLOC_SIZE;
+			self.db.resize(file, current_size + alloc_size)?;
+		}
 		let root = self.root.as_mut().unwrap();
 		root.write(file)?;
 		self.meta.root = root.meta;

@@ -14,6 +14,8 @@ use crate::transaction::Transaction;
 const MAGIC_VALUE: u32 = 0xABCDEF;
 const VERSION: u32 = 1;
 
+pub const ALLOC_SIZE: u64 = 8 * 1024 * 1024;
+
 #[derive(Clone)]
 pub struct DB(Arc<DBInner>);
 
@@ -66,15 +68,22 @@ impl DBInner {
 		Ok(db)
 	}
 
-	pub fn remap(&mut self, file: &File) {
+	pub fn resize(&mut self, file: &File, new_size: u64) -> Result<()> {
+		println!("RESIZING TO {}", new_size);
+		println!("OLD MMAP SIZE {}", self.data.len());
+		file.allocate(new_size)?;
+		println!("NEW SIZE IS {}", file.metadata()?.len());
+		let _lock = self.mmap_lock.write()?;
 		let mmap = unsafe { Mmap::map(file).unwrap() };
 		self.data = mmap;
+		println!("NEW MMAP SIZE {}", self.data.len());
+		Ok(())
 	}
 
 }
 
 fn init_file(file: &mut File, pagesize: usize) -> Result<()> {
-	file.allocate((pagesize * 2000) as u64)?;
+	file.allocate((pagesize * 32) as u64)?;
 	let mut buf = vec![0; pagesize * 4];
 	
 	let mut get_page = |index: usize| {
