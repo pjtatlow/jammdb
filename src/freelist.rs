@@ -22,12 +22,10 @@ impl Freelist {
 
 	pub (crate) fn init(&mut self, free_pages: &[PageID]) {
 		free_pages.iter().for_each(|id| { self.free_pages.insert(*id); });
-		println!("Initializing list {:?}", self.free_pages);
 	}
 
 	// adds the page to the transaction's set of free pages
 	pub (crate) fn free(&mut self, tx_id: u64, page_id: PageID) {
-		println!("Freeing page {}", page_id);
 		let pages = self.pending_pages.entry(tx_id).or_insert(Vec::new());
 		pages.push(page_id);
 	}
@@ -35,7 +33,6 @@ impl Freelist {
 
 	// frees all pages from old transactions that have lower ids than the given tx_id
 	pub (crate) fn release(&mut self, tx_id: u64) {
-		println!("Releasing");
 		let pending_ids: Vec<u64> = self.pending_pages.keys().cloned().collect();
 		for other_tx_id in pending_ids {
 			if other_tx_id < tx_id {
@@ -75,8 +72,6 @@ impl Freelist {
 			for id in found..found+num_pages {
 				self.free_pages.remove(&id);
 			}
-			println!("Handing out a page from the freelist: {}", found);
-			println!("Remaining freelist: {:?}", self.free_pages);
 			return Some(found);
 		}
 

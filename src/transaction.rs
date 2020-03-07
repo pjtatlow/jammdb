@@ -152,7 +152,6 @@ impl<'a> TransactionInner {
 			None => {
 				let page_id = self.meta.num_pages + 1;
 				self.meta.num_pages += num_pages;
-				println!("Allocating new page {}", page_id);
 				page_id
 			}
 		};
@@ -186,8 +185,8 @@ impl<'a> TransactionInner {
 			self.freelist.free(self.meta.tx_id, self.meta.freelist_page);
 			let (page_id, num_pages) = self.allocate(self.freelist.size());
 			let page_ids = self.freelist.pages();
-			println!("Writing freelist {:?}", page_ids);
 			let size = self.freelist.size();
+
 			let mut buf = vec![0; size];
 			let mut page = unsafe {&mut *(&mut buf[0] as *mut u8 as *mut Page)};
 						
@@ -197,7 +196,6 @@ impl<'a> TransactionInner {
 			page.count = page_ids.len();
 			page.freelist_mut().copy_from_slice(page_ids.as_slice());
 
-			
 			file.write_all_at(buf.as_slice(), (self.db.pagesize * page_id) as u64)?;
 
 			self.meta.freelist_page = page_id;
@@ -227,6 +225,8 @@ impl<'a> TransactionInner {
 		}
 
 		file.flush()?;
+
+		self.db.freelist = self.freelist.clone();
 		Ok(())
 	}
 
