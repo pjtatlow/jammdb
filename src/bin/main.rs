@@ -6,24 +6,102 @@ fn main() -> Result<(), Error> {
         let db = DB::open("test.db")?;
         let mut tx = db.tx(true)?;
         let b = tx.create_bucket("abc")?;
-        for i in 0..=10000_u32 {
+        for i in 0..=1_u32 {
             b.put(i.to_be_bytes(), i.to_string())?;
         }
         tx.commit()?;
-        tx.print_graph();
+        println!("\n\n");
+        // tx.print_graph();
     }
-    // println!("DONE WITH INITIAL WRITE");
-    // {
-    //     let db = DB::open("test.db")?;
-    //     let mut tx = db.tx()?;
-    //     let b = tx.get_bucket("abc")?;
+    println!("DONE WITH INITIAL WRITE");
+    {
+        let db = DB::open("test.db")?;
+        let mut tx = db.tx(true)?;
+        let b = tx.get_bucket("abc")?;
         
-    //     println!("{:#X?}", 53_u32.to_be_bytes());
-    //     println!("A: {:#?}", b.get(53_u32.to_be_bytes()));
-    //     // b.put(8888_u32.to_be_bytes(), "*8888*");
-    //     // println!("B: {:#?}", b.get(8888_u32.to_be_bytes()));
-    //     // tx.commit()?;
-    // }
+        // println!("A: {:#?}", b.get(1_u32.to_be_bytes()));
+        b.put(1_u32.to_be_bytes(), "*11111111111*")?;
+        // println!("B: {:#?}", b.get(1_u32.to_be_bytes()));
+        tx.commit()?;
+        println!("\n\n");
+    }
+    {
+        let db = DB::open("test.db")?;
+        let mut tx = db.tx(true)?;
+        let b = tx.get_bucket("abc")?;
+        
+        // println!("A: {:#?}", b.get(1_u32.to_be_bytes()));
+        b.put(1_u32.to_be_bytes(), "******1******")?;
+        // println!("B: {:#?}", b.get(1_u32.to_be_bytes()));
+        tx.commit()?;
+        println!("\n\n");
+    }
+    {
+        let db = DB::open("test.db")?;
+        let mut tx = db.tx(true)?;
+        let b = tx.get_bucket("abc")?;
+        
+        // println!("A: {:#?}", b.get(1_u32.to_be_bytes()));
+        b.put(1_u32.to_be_bytes(), "*11111111111*")?;
+        // println!("B: {:#?}", b.get(1_u32.to_be_bytes()));
+        tx.commit()?;
+        println!("\n\n");
+    }
+    {
+        let db = DB::open("test.db")?;
+        let mut tx = db.tx(true)?;
+        let b = tx.get_bucket("abc")?;
+        
+        // println!("A: {:#?}", b.get(1_u32.to_be_bytes()));
+        b.put(1_u32.to_be_bytes(), "******1******")?;
+        // println!("B: {:#?}", b.get(1_u32.to_be_bytes()));
+        tx.commit()?;
+        println!("\n\n");
+    }
+    {
+        let db = DB::open("test.db")?;
+        let mut tx = db.tx(true)?;
+        let b = tx.get_bucket("abc")?;
+        
+        // println!("A: {:#?}", b.get(1_u32.to_be_bytes()));
+        b.put(1_u32.to_be_bytes(), "*11111111111*")?;
+        // println!("B: {:#?}", b.get(1_u32.to_be_bytes()));
+        tx.commit()?;
+        println!("\n\n");
+    }
+    {
+        let db = DB::open("test.db")?;
+        let mut tx = db.tx(true)?;
+        let b = tx.get_bucket("abc")?;
+        
+        // println!("A: {:#?}", b.get(1_u32.to_be_bytes()));
+        b.put(1_u32.to_be_bytes(), "******1******")?;
+        // println!("B: {:#?}", b.get(1_u32.to_be_bytes()));
+        tx.commit()?;
+        println!("\n\n");
+    }
+    {
+        let db = DB::open("test.db")?;
+        let mut tx = db.tx(true)?;
+        let b = tx.get_bucket("abc")?;
+        
+        // println!("A: {:#?}", b.get(1_u32.to_be_bytes()));
+        b.put(1_u32.to_be_bytes(), "*11111111111*")?;
+        // println!("B: {:#?}", b.get(1_u32.to_be_bytes()));
+        tx.commit()?;
+        println!("\n\n");
+    }
+    {
+        let db = DB::open("test.db")?;
+        let mut tx = db.tx(true)?;
+        let b = tx.get_bucket("abc")?;
+        
+        // println!("A: {:#?}", b.get(1_u32.to_be_bytes()));
+        b.put(1_u32.to_be_bytes(), "******1******")?;
+        // println!("B: {:#?}", b.get(1_u32.to_be_bytes()));
+        tx.commit()?;
+        println!("\n\n");
+    }
     // {
     //     let db = DB::open("test.db")?;
     //     let mut tx = db.tx()?;
@@ -33,6 +111,7 @@ fn main() -> Result<(), Error> {
     //     b.put(8888_u32.to_be_bytes(), "**8888**");
     //     println!("D: {:#?}", b.get(8888_u32.to_be_bytes()));
     //     tx.commit()?;
+    println!("\n\n");
     // }
     
     // {
@@ -44,6 +123,7 @@ fn main() -> Result<(), Error> {
     //     b.put(8888_u32.to_be_bytes(), "8888");
     //     println!("F: {:#?}", b.get(8888_u32.to_be_bytes()));
     //     tx.commit()?;
+    println!("\n\n");
     // }
     
     // let mut v: Vec<std::thread::JoinHandle<_>> = vec![];

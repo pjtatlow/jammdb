@@ -145,6 +145,7 @@ impl Bucket {
 		}
 	}
 
+	// Returns an Error only if the current transaction is read-only.
 	pub fn put<T: AsRef<[u8]>, S: AsRef<[u8]>>(&mut self, key: T, value: S) -> Result<()> {
 		if !self.tx.writable {
 			return Err(Error::ReadOnlyTx);

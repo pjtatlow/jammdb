@@ -45,6 +45,22 @@ impl Page {
 		unsafe{&mut *(&mut self.ptr as *mut usize as *mut Meta)}
 	}
 
+	pub (crate) fn freelist(&self) -> &[PageID] {
+		assert_type(self.page_type, Page::TYPE_FREELIST);
+		unsafe{
+			let start = &self.ptr as *const usize as *const PageID;
+			from_raw_parts(start, self.count as usize)
+		}		
+	}
+
+	pub (crate) fn freelist_mut(&mut self) -> &mut [PageID] {
+		assert_type(self.page_type, Page::TYPE_FREELIST);
+		unsafe{
+			let start = &self.ptr as *const usize as *mut PageID;
+			from_raw_parts_mut(start, self.count as usize)
+		}		
+	}
+
 	pub (crate) fn leaf_elements(&self) -> &[LeafElement] {
 		assert_type(self.page_type, Page::TYPE_LEAF);
 		unsafe{

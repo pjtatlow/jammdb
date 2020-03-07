@@ -151,7 +151,7 @@ impl Node {
 		Node{
 			id,
 			page_id: p.id,
-			num_pages: 0,
+			num_pages: p.overflow + 1,
 			bucket: b,
 			children: Vec::new(),
 			data,
@@ -208,7 +208,9 @@ impl Node {
 	}
 
 	fn allocate(&mut self) {
-		// TODO release old page
+		if self.page_id != 0 {
+			self.bucket.tx.free(self.page_id, self.num_pages);
+		}
 		let size = self.size();
 		let (page_id, num_pages) = self.bucket.tx.allocate(size);
 		self.page_id = page_id;

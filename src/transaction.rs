@@ -1,7 +1,8 @@
 use std::pin::Pin;
-use std::sync::{MutexGuard, RwLockReadGuard};
 use std::fs::File;
+use std::io::Write;
 use std::os::unix::fs::FileExt;
+use std::sync::{MutexGuard, RwLockReadGuard};
 
 use crate::db::{DBInner, ALLOC_SIZE};
 use crate::meta::Meta;
@@ -11,11 +12,21 @@ use crate::errors::Result;
 use crate::ptr::Ptr;
 use crate::data::SliceParts;
 use crate::errors::Error;
+use crate::freelist::Freelist;
 
 pub struct Transaction<'a> {
 	inner: Pin<Box<TransactionInner>>,
 	file: Option<MutexGuard<'a, File>>,
+
 	#[allow(dead_code)]
+	/*
+		we hold this lock only in read-only transactions
+		to prevent the underlying file from being resized while
+		anyone is reading from it
+
+		TODO: put the mmap in a Mutec<Arc>> so we can just make a clone
+		for each transaction rather than having to do this
+	*/
 	mmap_lock: Option<RwLockReadGuard<'a, ()>>,
 }
 
@@ -60,29 +71,39 @@ pub (crate) struct TransactionInner {
 	pub (crate) db: Ptr<DBInner>,
 	pub (crate) meta: Meta,
 	pub (crate) writable: bool,
-	// _write_lock: std::sync::MutexGuard<, ()>,
+	pub (crate) freelist: Freelist,
 	root: Option<Bucket>,
 	buffers: Vec<Vec<u8>>,
-	// phantom: std::marker::PhantomData<&'tx u8>,
 }
 
 impl<'a> TransactionInner {
 
 	fn new(db: &DBInner, writable: bool) -> Result<TransactionInner> {
-		let _write_lock = db.write_lock.lock()?;
-		// let db2 = db.clone();
-		let meta: Meta = Page::from_buf(&db.data, 0, db.pagesize).meta().clone();
-		// println!("{:?}", meta);
+		let mut meta: Meta = db.meta();
+		let mut freelist = db.freelist.clone();
+		{
+			let mut open_ro_txs = db.open_ro_txs.lock().unwrap();
+			if writable {
+				meta.tx_id += 1;
+				if open_ro_txs.len() > 0 {
+					freelist.release(open_ro_txs[0]);
+				} else {
+					freelist.release(meta.tx_id);
+				}
+			} else {
+				open_ro_txs.push(meta.tx_id);
+				open_ro_txs.sort_unstable();
+			}
+		}
+
 		let tx = TransactionInner{
 			db: Ptr::new(db),
 			meta,
 			writable,
-			// _write_lock,
+			freelist,
 			root: None,
 			buffers: Vec::new(),
-			// phantom: std::marker::PhantomData{},
 		};
-		// println!("ID({:?}): {:?}", std::thread::current().id(), tx.page(0).meta());
 		Ok(tx)
 	}
 
@@ -118,10 +139,23 @@ impl<'a> TransactionInner {
 		SliceParts::from_slice(&self.buffers.last().unwrap()[..])
 	}
 
+	pub (crate) fn free(&mut self, page_id: PageID, num_pages: usize) {
+		for id in page_id..(page_id+num_pages) {
+			self.freelist.free(self.meta.tx_id, id);
+		}
+	}
+
 	pub (crate) fn allocate(&mut self, bytes: usize) -> (PageID, usize) {
 		let num_pages = (bytes / self.db.pagesize) + 1;
-		let page_id = self.meta.num_pages + 1;
-		self.meta.num_pages += num_pages;
+		let page_id = match self.freelist.allocate(num_pages) {
+			Some(page_id) => page_id,
+			None => {
+				let page_id = self.meta.num_pages + 1;
+				self.meta.num_pages += num_pages;
+				println!("Allocating new page {}", page_id);
+				page_id
+			}
+		};
 		(page_id, num_pages)
 	}
 
@@ -139,26 +173,77 @@ impl<'a> TransactionInner {
 			let alloc_size = ((size_diff / ALLOC_SIZE) + 1) * ALLOC_SIZE;
 			self.db.resize(file, current_size + alloc_size)?;
 		}
-		let root = self.root.as_mut().unwrap();
-		root.write(file)?;
-		self.meta.root = root.meta;
-		let mut buf = vec![0; self.db.pagesize];
-		let mut page = unsafe {&mut *(&mut buf[0] as *mut u8 as *mut Page)};
-		page.id = 0;
-		page.page_type = Page::TYPE_META;
-		let m = page.meta_mut();
-		
-		m.magic = self.meta.magic;
-		m.version = self.meta.version;
-		m.pagesize = self.meta.pagesize;
-		m.freelist_page = self.meta.freelist_page;
-		m.root = self.meta.root;
-		m.num_pages = self.meta.num_pages;
-		// let start = &self.meta as *const Meta as *const u8;
-		// let buf = unsafe{ std::slice::from_raw_parts(start, std::mem::size_of::<Meta>()) };
-		file.write_all_at(buf.as_slice(), 0)?;
-		// self.db.remap(file);
+
+		// write the data to the file
+		{
+			let root = self.root.as_mut().unwrap();
+			root.write(file)?;
+			self.meta.root = root.meta;
+		}
+
+		// write freelist to file
+		{
+			self.freelist.free(self.meta.tx_id, self.meta.freelist_page);
+			let (page_id, num_pages) = self.allocate(self.freelist.size());
+			let page_ids = self.freelist.pages();
+			println!("Writing freelist {:?}", page_ids);
+			let size = self.freelist.size();
+			let mut buf = vec![0; size];
+			let mut page = unsafe {&mut *(&mut buf[0] as *mut u8 as *mut Page)};
+						
+			page.id = page_id;
+			page.overflow = num_pages - 1;
+			page.page_type = Page::TYPE_FREELIST;
+			page.count = page_ids.len();
+			page.freelist_mut().copy_from_slice(page_ids.as_slice());
+
+			
+			file.write_all_at(buf.as_slice(), (self.db.pagesize * page_id) as u64)?;
+
+			self.meta.freelist_page = page_id;
+		}
+
+		// write meta page to file
+		{
+			let mut buf = vec![0; self.db.pagesize];
+			let mut page = unsafe {&mut *(&mut buf[0] as *mut u8 as *mut Page)};
+			
+			let meta_page_id = if self.meta.meta_page == 0 { 1 } else { 0 };
+			
+			page.id = meta_page_id;
+			page.page_type = Page::TYPE_META;
+			let m = page.meta_mut();
+			
+			m.meta_page = meta_page_id as u8;
+			m.magic = self.meta.magic;
+			m.version = self.meta.version;
+			m.pagesize = self.meta.pagesize;
+			m.root = self.meta.root;
+			m.num_pages = self.meta.num_pages;
+			m.freelist_page = self.meta.freelist_page;
+			m.tx_id = self.meta.tx_id;
+			m.hash = m.hash();
+			file.write_all_at(buf.as_slice(), (self.db.pagesize * meta_page_id) as u64)?;
+		}
+
+		file.flush()?;
 		Ok(())
 	}
 
+}
+
+impl Drop for TransactionInner {
+    fn drop(&mut self) {
+		if !self.writable {
+			let mut open_txs = self.db.open_ro_txs.lock().unwrap();
+			let index = match open_txs.binary_search(&self.meta.tx_id) {
+				Ok(i) => i,
+				_ => {
+					debug_assert!(false, "dropped transaction id does not exist");
+					return;
+				},
+			};
+			open_txs.remove(index);
+		}
+    }
 }
