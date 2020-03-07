@@ -222,7 +222,7 @@ impl<'a> TransactionInner {
 			m.num_pages = self.meta.num_pages;
 			m.freelist_page = self.meta.freelist_page;
 			m.tx_id = self.meta.tx_id;
-			m.hash = m.hash();
+			m.hash = m.hash_self();
 			file.write_all_at(buf.as_slice(), (self.db.pagesize * meta_page_id) as u64)?;
 		}
 

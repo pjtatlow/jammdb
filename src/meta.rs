@@ -23,10 +23,10 @@ pub (crate) struct Meta {
 
 impl Meta {
 	pub (crate) fn valid(&self) -> bool {
-		self.hash == self.hash()
+		self.hash == self.hash_self()
 	}
 
-	pub (crate) fn hash(&self) -> [u8; 32] {
+	pub (crate) fn hash_self(&self) -> [u8; 32] {
 		let mut hash_result: [u8; 32] = [0; 32];
 		let mut hasher = Sha3_256::new();
 		hasher.input(self.bytes());

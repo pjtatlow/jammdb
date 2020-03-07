@@ -124,7 +124,7 @@ fn init_file(file: &mut File, pagesize: usize) -> Result<()> {
 		m.freelist_page = 2;
 		m.root = BucketMeta{root_page: 3, sequence: 0};
 		m.num_pages = 3;
-		m.hash = m.hash();
+		m.hash = m.hash_self();
 	}
 
 	let p = get_page(2);
