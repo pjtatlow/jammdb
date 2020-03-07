@@ -2,7 +2,9 @@ use std::pin::Pin;
 use std::fs::File;
 use std::io::Write;
 use std::os::unix::fs::FileExt;
-use std::sync::{MutexGuard, RwLockReadGuard};
+use std::sync::{Arc, MutexGuard};
+
+use memmap::Mmap;
 
 use crate::db::{DBInner, ALLOC_SIZE};
 use crate::meta::Meta;
@@ -17,30 +19,17 @@ use crate::freelist::Freelist;
 pub struct Transaction<'a> {
 	inner: Pin<Box<TransactionInner>>,
 	file: Option<MutexGuard<'a, File>>,
-
-	#[allow(dead_code)]
-	/*
-		we hold this lock only in read-only transactions
-		to prevent the underlying file from being resized while
-		anyone is reading from it
-
-		TODO: put the mmap in a Mutec<Arc>> so we can just make a clone
-		for each transaction rather than having to do this
-	*/
-	mmap_lock: Option<RwLockReadGuard<'a, ()>>,
 }
 
 impl<'a> Transaction<'a> {
 	pub (crate) fn new(db: &'a DBInner, writable: bool) -> Result<Transaction<'a>> {
 		let file = if writable { Some(db.file.lock()?) } else { None };
-		let mmap_lock = if writable { None } else { Some(db.mmap_lock.read()?) };
 		let tx = TransactionInner::new(db, writable)?;
 		let mut inner = Pin::new(Box::new(tx));
 		inner.init();
 		Ok(Transaction{
 			inner,
 			file,
-			mmap_lock,
 		})
 	}
 
@@ -72,6 +61,7 @@ pub (crate) struct TransactionInner {
 	pub (crate) meta: Meta,
 	pub (crate) writable: bool,
 	pub (crate) freelist: Freelist,
+	data: Arc<Mmap>,
 	root: Option<Bucket>,
 	buffers: Vec<Vec<u8>>,
 }
@@ -95,12 +85,15 @@ impl<'a> TransactionInner {
 				open_ro_txs.sort_unstable();
 			}
 		}
+		let _lock = db.mmap_lock.lock()?;
+		let data = db.data.clone();
 
 		let tx = TransactionInner{
 			db: Ptr::new(db),
 			meta,
 			writable,
 			freelist,
+			data,
 			root: None,
 			buffers: Vec::new(),
 		};
@@ -114,7 +107,7 @@ impl<'a> TransactionInner {
 
 	#[inline]
 	pub (crate) fn page(&self, id: usize) -> &Page {
-		Page::from_buf(&self.db.data, id, self.db.pagesize)
+		Page::from_buf(&self.data, id, self.db.pagesize)
 	}
 
 	pub (crate) fn get_bucket(&'a mut self, name: &[u8]) -> Result<&'a mut Bucket> {

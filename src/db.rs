@@ -1,6 +1,6 @@
 use std::io::Write;
 use std::fs::{File, OpenOptions};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 use fs2::FileExt;
 use memmap::Mmap;
@@ -33,12 +33,14 @@ impl DB {
 }
 
 pub (crate) struct DBInner {
-	pub (crate) mmap_lock: RwLock<()>,
-	pub (crate) data: Mmap,
-	pub (crate) file: Mutex<File>,
-	pub (crate) pagesize: usize,
-	pub (crate) open_ro_txs: Mutex<Vec<u64>>,
+	pub (crate) data: Arc<Mmap>,
 	pub (crate) freelist: Freelist,
+
+	pub (crate) file: Mutex<File>,
+	pub (crate) mmap_lock: Mutex<()>,
+	pub (crate) open_ro_txs: Mutex<Vec<u64>>,
+
+	pub (crate) pagesize: usize,
 }
 
 impl DBInner {
@@ -57,15 +59,17 @@ impl DBInner {
 			init_file(&mut file, pagesize)?;
 		}
 
-		let mmap = unsafe { Mmap::map(&file)? };
+		let mmap = unsafe { Arc::new(Mmap::map(&file)?) };
 
 		let mut db = DBInner{
-			mmap_lock: RwLock::new(()),
 			data: mmap,
-			file: Mutex::new(file),
-			pagesize,
-			open_ro_txs: Mutex::new(Vec::new()),
 			freelist: Freelist::new(),
+
+			file: Mutex::new(file),
+			mmap_lock: Mutex::new(()),
+			open_ro_txs: Mutex::new(Vec::new()),
+			
+			pagesize,
 		};
 
 		let meta = db.meta();
@@ -84,9 +88,9 @@ impl DBInner {
 
 	pub (crate) fn resize(&mut self, file: &File, new_size: u64) -> Result<()> {
 		file.allocate(new_size)?;
-		let _lock = self.mmap_lock.write()?;
+		let _lock = self.mmap_lock.lock()?;
 		let mmap = unsafe { Mmap::map(file).unwrap() };
-		self.data = mmap;
+		self.data = Arc::new(mmap);
 		Ok(())
 	}
 
