@@ -30,7 +30,6 @@ impl Freelist {
 		pages.push(page_id);
 	}
 
-
 	// frees all pages from old transactions that have lower ids than the given tx_id
 	pub (crate) fn release(&mut self, tx_id: u64) {
 		let pending_ids: Vec<u64> = self.pending_pages.keys().cloned().collect();
@@ -88,7 +87,6 @@ impl Freelist {
 		page_ids
 	}
 
-	#[inline]
 	pub (crate) fn size(&self) -> usize {
 		let count = self.pages().len();
 		HEADER_SIZE + (PAGE_ID_SIZE * count)
@@ -100,10 +98,12 @@ mod tests {
     use super::*;
 
 	fn freelist_from_vec(v: Vec<PageID>) -> Freelist {
-		Freelist{
+		let mut freelist = Freelist{
 			free_pages: v.iter().cloned().collect(),
 			pending_pages: BTreeMap::new(),
-		}
+		};
+		freelist.init(v.as_slice());
+		freelist
 	}
 
     #[test]
@@ -122,4 +122,74 @@ mod tests {
 		assert_eq!(freelist.allocate(1), None);
     }
 
+	#[test]
+	fn test_free() {
+		let mut freelist = Freelist::new();
+
+		freelist.free(1, 5);
+		assert_eq!(freelist.pending_pages.len(), 1);
+		assert_eq!(freelist.pending_pages.get(&1), Some(&vec![5]));
+		
+		freelist.free(1, 4);
+		assert_eq!(freelist.pending_pages.len(), 1);
+		assert_eq!(freelist.pending_pages.get(&1), Some(&vec![5, 4]));
+		
+		freelist.free(1, 3);
+		assert_eq!(freelist.pending_pages.len(), 1);
+		assert_eq!(freelist.pending_pages.get(&1), Some(&vec![5, 4, 3]));
+		
+		freelist.free(2, 7);
+		assert_eq!(freelist.pending_pages.len(), 2);
+		assert_eq!(freelist.pending_pages.get(&1), Some(&vec![5, 4, 3]));
+		assert_eq!(freelist.pending_pages.get(&2), Some(&vec![7]));
+		
+		assert_eq!(freelist.free_pages, BTreeSet::new());
+	}
+
+
+	#[test]
+	fn test_pages() {
+		let mut freelist = freelist_from_vec(vec![1,2,3,4,5]);
+
+		assert_eq!(freelist.pages(), vec![1,2,3,4,5]);
+		
+		freelist.free(2, 9);
+		freelist.free(2, 10);
+		freelist.free(2, 11);
+		assert_eq!(freelist.pages(), vec![1,2,3,4,5,9,10,11]);
+
+		freelist.free(1, 6);
+		freelist.free(1, 7);
+		freelist.free(1, 8);
+		assert_eq!(freelist.pages(), vec![1,2,3,4,5,6,7,8,9,10,11]);
+	}
+
+	#[test]
+	fn test_release() {
+		let mut freelist = Freelist::new();
+
+		freelist.free(1, 5);
+		freelist.free(1, 10);
+		freelist.free(1, 7);
+
+		assert_eq!(freelist.free_pages.len(), 0);
+		assert_eq!(freelist.pending_pages.len(), 1);
+		
+		freelist.release(1);
+		
+		assert_eq!(freelist.free_pages.len(), 0);
+		assert_eq!(freelist.pending_pages.len(), 1);
+
+		freelist.release(2);
+		
+		assert_eq!(freelist.free_pages.len(), 3);
+		assert_eq!(freelist.pending_pages.len(), 0);
+		assert_eq!(freelist.pages(), vec![5,7,10]);
+	}
+
+	#[test]
+	fn test_size() {
+		let freelist = freelist_from_vec(vec![1,2,3]);
+		assert_eq!(freelist.size(), HEADER_SIZE + (PAGE_ID_SIZE * 3));
+	}
 }
