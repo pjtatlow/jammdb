@@ -126,7 +126,7 @@ impl Bucket {
 		{
 			let b = self.buckets.get(&key).unwrap();
 			let key = self.tx.copy_data(name);
-			data = BucketData::from_bucket(key, b);
+			data = BucketData::from_meta(key, &b.meta);
 		}
 
 		let node = self.node(c.current_id());

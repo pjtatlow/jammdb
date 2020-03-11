@@ -177,7 +177,7 @@ impl Page {
 					match elem.node_type {
 						Node::TYPE_BUCKET => {
 							let parts = SliceParts::from_slice(elem.value());
-							let meta = unsafe{ *(parts.ptr as *const BucketMeta) };
+							let meta = unsafe{ *(parts.slice()[0] as *const BucketMeta) };
 							let elem_name = match std::str::from_utf8(elem.key()) {
 								// Ok(key) => format!("\"Index: {}\\nPage: {}\\nKey '{}'\\n {:?}\"", i, self.id, key, meta),
 								_ => format!("\"Index: {}\\nPage: {}\\nKey {:?}\\n {:?}\"", i, self.id, elem.key(), meta),	

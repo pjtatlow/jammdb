@@ -2,7 +2,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::cmp::{Ord, Ordering};
 
-use crate::bucket::{BucketMeta, Bucket};
+use crate::bucket::BucketMeta;
 use crate::page::LeafElement;
 use crate::node::{Node, NodeType};
 
@@ -30,8 +30,8 @@ impl Data {
 
 	pub (crate) fn key_parts(&self) -> SliceParts {
 		match self {
-			Data::Bucket(b) => b.0[0],
-			Data::KeyValue(kv) => kv.0[0],
+			Data::Bucket(b) => b.name,
+			Data::KeyValue(kv) => kv.key,
 		}
 	}
 
@@ -44,7 +44,7 @@ impl Data {
 
 	pub (crate) fn value(&self) -> &[u8] {
 		match self {
-			Data::Bucket(b) => b.0[1].slice(),
+			Data::Bucket(b) => b.meta.slice(),
 			Data::KeyValue(kv) => kv.value(),
 		}
 	}
@@ -58,76 +58,78 @@ impl Data {
 }
 
 #[derive(Clone, Debug)]
-pub struct BucketData([SliceParts; 2]);
+pub struct BucketData {
+	name: SliceParts,
+	meta: SliceParts,
+}
 
 impl BucketData {
 	pub (crate) fn new(name: &[u8], meta: &[u8]) -> Data {
-		let b = BucketData([
-			SliceParts::from_slice(name),
-			SliceParts::from_slice(meta),
-		]);
-		// println!("NEW BUCKET: {:?}", std::str::from_utf8(b.name()));
+		let b = BucketData{
+			name: SliceParts::from_slice(name),
+			meta: SliceParts::from_slice(meta),
+		};
 		Data::Bucket(b)
 	}
 
-	pub (crate) fn from_slice_parts(key: SliceParts, meta: SliceParts) -> Data {
-		Data::Bucket(BucketData([key, meta]))
+	pub (crate) fn from_slice_parts(name: SliceParts, meta: SliceParts) -> Data {
+		Data::Bucket(BucketData{name, meta})
 	}
 
-	pub (crate) fn from_bucket(name: SliceParts, b: &Bucket) -> Data {
-		Data::Bucket(BucketData([
+	pub (crate) fn from_meta(name: SliceParts, meta: &BucketMeta) -> Data {
+		Data::Bucket(BucketData{
 			name,
-			SliceParts{
-				ptr: &b.meta as *const BucketMeta as *const u8,
-				len: std::mem::size_of::<BucketMeta>(),
-			},
-		]))
+			meta: SliceParts::from_slice(meta.as_ref()),
+		})
 	}
 
 	pub fn name(&self) -> &[u8] {
-		unsafe{ std::slice::from_raw_parts(self.0[0].ptr, self.0[0].len) }
+		self.name.slice()
 	}
 
 	pub (crate) fn meta(&self) -> BucketMeta {
-		unsafe{ *(self.0[1].ptr as *const BucketMeta) }
+		unsafe{ *(self.meta.ptr as *const BucketMeta) }
 	}
 
 	pub fn size(&self) -> usize {
-		self.0[0].size() + self.0[1].size()
+		self.name.size() + self.meta.size()
 	}
 }
 
 #[derive(Clone, Debug)]
-pub struct KVPair([SliceParts; 2]);
+pub struct KVPair{
+	key: SliceParts,
+	value: SliceParts,
+}
 
 impl KVPair {
 	fn new(key: &[u8], value: &[u8]) -> Data {
-		Data::KeyValue(KVPair([
-			SliceParts::from_slice(key),
-			SliceParts::from_slice(value),
-		]))
+		Data::KeyValue(KVPair{
+			key: SliceParts::from_slice(key),
+			value: SliceParts::from_slice(value),
+		})
 	}
 
 	pub (crate) fn from_slice_parts(key: SliceParts, value: SliceParts) -> Data {
-		Data::KeyValue(KVPair([key, value]))
+		Data::KeyValue(KVPair{key, value})
 	}
 
 	pub fn key(&self) -> &[u8] {
-		self.0[0].slice()
+		self.key.slice()
 	}
 
 	pub fn value(&self) -> &[u8] {
-		self.0[1].slice()
+		self.value.slice()
 	}
 
 	pub fn size(&self) -> usize {
-		self.0[0].size() + self.0[1].size()
+		self.key.size() + self.value.size()
 	}
 }
 
 #[derive(Clone, Copy)]
 pub (crate) struct SliceParts {
-	pub (crate) ptr: *const u8,
+	ptr: *const u8,
 	len: usize,
 }
 
@@ -191,4 +193,120 @@ impl fmt::Debug for SliceParts {
 		write!(f, "]")?;
 		Ok(())
     }
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_slice_parts() {
+		let s = vec![42, 84, 126];
+		let s = s.as_slice();
+
+		let parts = SliceParts::from_slice(s);
+		assert_eq!(parts.slice(), s);
+		assert_eq!(parts.size(), 3);
+
+		assert_eq!(parts, SliceParts::from_slice(s));
+
+		use std::collections::hash_map::RandomState;
+		use std::hash::BuildHasher;
+		let state = RandomState::new();
+		let mut hasher_1 = state.build_hasher();
+		let mut hasher_2 = state.build_hasher();
+		
+		parts.hash(&mut hasher_1);
+		s.hash(&mut hasher_2);
+		
+		assert_eq!(hasher_1.finish(), hasher_2.finish());
+		assert_eq!(format!("{:?}", s), "[42, 84, 126]");
+		let s2 = vec![41,85,142];
+		let other_parts = SliceParts::from_slice(s2.as_slice());
+		assert_eq!(parts.partial_cmp(&other_parts), Some(Ordering::Greater));
+		assert!(parts.eq(&other_parts) == false);
+		
+		let s2 = vec![43,1,200];
+		let other_parts = SliceParts::from_slice(s2.as_slice());
+		assert_eq!(parts.partial_cmp(&other_parts), Some(Ordering::Less));
+		assert!(parts.eq(&other_parts) == false);
+		
+		let s2 = vec![42, 84, 126];
+		let other_parts = SliceParts::from_slice(s2.as_slice());
+		assert_eq!(parts.partial_cmp(&other_parts), Some(Ordering::Equal));
+		assert!(parts.eq(&other_parts) == true);
+	}
+
+	#[test]
+	fn test_kv_pair() {
+		let k = vec![1,2,3,4];
+		let v = vec![5,6,7,8,9,0];
+
+		match KVPair::new(&k, &v) {
+			Data::KeyValue(kv) => {
+				assert_eq!(kv.key(), &k[..]);
+				assert_eq!(kv.value(), &v[..]);
+				assert_eq!(kv.size(), 10);
+			}, 
+			_ => panic!("Expected Data::KeyValue"),
+		}
+
+		match KVPair::from_slice_parts(SliceParts::from_slice(&k), SliceParts::from_slice(&v)) {
+			Data::KeyValue(kv) => {
+				assert_eq!(kv.key(), &k[..]);
+				assert_eq!(kv.value(), &v[..]);
+				assert_eq!(kv.size(), 10);
+			}, 
+			_ => panic!("Expected Data::KeyValue"),
+		}
+
+	}
+
+	#[test]
+	fn test_bucket_data() {
+		let name = "Hello Bucket!".as_bytes();
+		let mut meta = BucketMeta{root_page: 3, sequence: 24985738796};
+
+		match BucketData::new(name, meta.as_ref()) {
+			Data::Bucket(b) => {
+				assert_eq!(b.name(), name);
+				assert_eq!(b.meta().root_page, meta.root_page);
+				assert_eq!(b.meta().sequence, meta.sequence);
+				assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta));
+
+
+				meta.sequence += 1;
+				assert_eq!(b.meta().sequence, meta.sequence);
+			},
+			_ => panic!("Expected Data::Bucket"),
+		}
+
+		match BucketData::from_slice_parts(SliceParts::from_slice(name), SliceParts::from_slice(meta.as_ref())) {
+			Data::Bucket(b) => {
+				assert_eq!(b.name(), name);
+				assert_eq!(b.meta().root_page, meta.root_page);
+				assert_eq!(b.meta().sequence, meta.sequence);
+				assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta));
+
+				meta.sequence += 1;
+				assert_eq!(b.meta().sequence, meta.sequence);
+			},
+			_ => panic!("Expected Data::Bucket"),
+		}
+
+		match BucketData::from_meta(SliceParts::from_slice(name), &meta) {
+			Data::Bucket(b) => {
+				assert_eq!(b.name(), name);
+				assert_eq!(b.meta().root_page, meta.root_page);
+				assert_eq!(b.meta().sequence, meta.sequence);
+				assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta));
+
+				meta.sequence += 1;
+				assert_eq!(b.meta().sequence, meta.sequence);
+			},
+			_ => panic!("Expected Data::Bucket"),
+		}
+
+	}
+
 }
