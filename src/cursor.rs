@@ -109,7 +109,6 @@ impl Cursor {
 		Cursor{
 			bucket: b,
 			stack: vec![],
-			// phantom: std::marker::PhantomData{},
 		}
 	}
 

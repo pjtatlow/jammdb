@@ -13,18 +13,7 @@ pub enum Error {
     SyncError(&'static str),
 }
 
-impl StdError for Error {
-    fn description(&self) -> &str {
-        match self {
-            Error::BucketExists => "Bucket already exists",
-            Error::BucketMissing => "Bucket does not exist",
-            Error::IncompatibleValue => "Value not compatible",
-            Error::ReadOnlyTx => "Cannot write in a read-only transaction",
-			Error::IOError(e) => e.description(),
-			Error::SyncError(s) => s,
-        }
-    }
-}
+impl StdError for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

@@ -306,7 +306,29 @@ mod tests {
 			},
 			_ => panic!("Expected Data::Bucket"),
 		}
+	}
 
+	#[test]
+	fn test_data() {
+		let k = vec![1,2,3,4,5,6,7,8];
+		let v = vec![11,22,33,44,55,66,77,88];
+
+		let data: Data = KVPair::new(&k, &v);
+
+		assert_eq!(data.node_type(), Node::TYPE_DATA);
+		assert_eq!(data.key_parts(), SliceParts::from_slice(&k));
+		assert_eq!(data.key(), &k[..]);
+		assert_eq!(data.value(), &v[..]);
+		assert_eq!(data.size(), 16);
+
+		let meta = BucketMeta{root_page: 456, sequence: 8888888};
+		let data: Data = BucketData::new(&k, meta.as_ref());
+
+		assert_eq!(data.node_type(), Node::TYPE_BUCKET);
+		assert_eq!(data.key_parts(), SliceParts::from_slice(&k));
+		assert_eq!(data.key(), &k[..]);
+		assert_eq!(data.value(), meta.as_ref());
+		assert_eq!(data.size(), 8 + std::mem::size_of_val(&meta));
 	}
 
 }

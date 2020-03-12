@@ -40,3 +40,37 @@ impl Meta {
 		unsafe{ std::slice::from_raw_parts(ptr, META_SIZE - 32) }
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_meta() {
+		let mut meta = Meta{
+			meta_page: 1,
+			magic: 1234567890,
+			version: 987654321,
+			pagesize: 4096,
+			root: BucketMeta{root_page: 2, sequence: 2020},
+			num_pages: 13,
+			freelist_page: 3,
+			tx_id: 8,
+			hash: [0; 32],
+		};
+
+		assert!(meta.valid() == false);
+		meta.hash = meta.hash_self();
+		assert!(meta.valid() == true);
+		assert_eq!(meta.hash, meta.hash_self());
+		// modify the last property before the hash
+		// to change the hash
+		meta.tx_id = 88;
+		assert_ne!(meta.hash, meta.hash_self());
+		// reset hash and make sure it is still valid
+		meta.hash = meta.hash_self();
+		assert!(meta.valid() == true);
+		assert_eq!(meta.hash, meta.hash_self());
+	}
+
+}
