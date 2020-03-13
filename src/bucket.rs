@@ -42,7 +42,7 @@ impl Bucket {
 		}
 	}
 
-	fn new_child(&mut self, name: &Vec<u8>) -> &mut Bucket {
+	fn new_child(&mut self, name: &Vec<u8>) {
 		let b = Bucket{
 			tx: Ptr::new(&self.tx),
 			meta: BucketMeta::default(),
@@ -60,7 +60,6 @@ impl Bucket {
 
 		b.nodes.push(Box::new(n));
 		b.page_node_ids.insert(0,0);
-		b
 	}
 
 	pub (crate) fn new_node(&mut self, data: NodeData) -> &mut Node {

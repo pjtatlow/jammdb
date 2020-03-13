@@ -41,7 +41,7 @@ impl<'a> Transaction<'a> {
 		self.inner.create_bucket(name.as_ref())
 	}
 
-	pub fn commit(&mut self) -> Result<()> {
+	pub fn commit(mut self) -> Result<()> {
 		if !self.inner.writable {
 			return Err(Error::ReadOnlyTx);
 		}

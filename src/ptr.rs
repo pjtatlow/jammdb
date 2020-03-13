@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 #[derive(Clone)]
-pub (crate) struct Ptr<T> (pub (crate) *const T);
+pub struct Ptr<T> (pub (crate) *const T);
 
 impl<T> Deref for Ptr<T> {
 	type Target = T;

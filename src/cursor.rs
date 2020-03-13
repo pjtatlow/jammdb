@@ -145,7 +145,6 @@ impl Cursor {
 	// recursive function that searches the bucket for a given key
 	fn search(&mut self, key: &[u8], page_id: PageID) -> bool {
 		let page_node = self.bucket.page_node(page_id);
-		// println!("SEARCHING PAGEID {} for key {} with count {}", page_id, unsafe{std::str::from_utf8_unchecked(key)}, page_node.len());
 		let (index, exact) = page_node.index(key);
 		let leaf = page_node.leaf();
 		self.stack.push(Elem{index, page_node});
@@ -183,10 +182,8 @@ impl Cursor {
 }
 
 impl Iterator for Cursor {
-    // we will be counting with usize
     type Item = Data;
 
-    // next() is the only required method
     fn next(&mut self) -> Option<Self::Item> {
 		if self.stack.len() == 0 {
 			self.seek_first();

@@ -1,6 +1,7 @@
 use std::io::Write;
 use std::fs::{File, OpenOptions};
 use std::sync::{Arc, Mutex};
+use std::path::Path;
 
 use fs2::FileExt;
 use memmap::Mmap;
@@ -22,12 +23,12 @@ pub const ALLOC_SIZE: u64 = 8 * 1024 * 1024;
 pub struct DB(Arc<DBInner>);
 
 impl DB {
-	pub fn open(path: &str) -> Result<DB> {
+	pub fn open<P: AsRef<Path>>(path: P) -> Result<DB> {
 		let db = DBInner::open(path)?;
 		Ok(DB(Arc::new(db)))
 	}
 
-	pub fn tx(&self, writable: bool) -> Result<Transaction> {
+	pub fn tx(&mut self, writable: bool) -> Result<Transaction> {
 		Transaction::new(&self.0, writable)
 	}
 }
@@ -45,7 +46,7 @@ pub (crate) struct DBInner {
 
 impl DBInner {
 
-	pub (crate) fn open(path: &str) -> Result<DBInner> {
+	pub (crate) fn open<P: AsRef<Path>>(path: P) -> Result<DBInner> {
 		let mut file = OpenOptions::new()
 			.create(true)
 			.read(true)
