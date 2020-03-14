@@ -5,6 +5,7 @@ pub (crate) type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum Error {
+    FileExists,
     BucketExists,
     BucketMissing,
     IncompatibleValue,
@@ -18,6 +19,7 @@ impl StdError for Error {}
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Error::FileExists => write!(f, "File already exists"),
             Error::BucketExists => write!(f, "Bucket already exists"),
             Error::BucketMissing => write!(f, "Bucket does not exist"),
             Error::IncompatibleValue => write!(f, "Value not compatible"),

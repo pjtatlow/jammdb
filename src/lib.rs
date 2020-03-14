@@ -10,7 +10,7 @@ mod cursor;
 mod data;
 mod freelist;
 
-pub use db::DB;
+pub use db::{DB, OpenOptions};
 pub use transaction::Transaction;
 pub use bucket::Bucket;
 pub use errors::*;

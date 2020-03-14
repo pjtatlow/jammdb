@@ -6,7 +6,7 @@ use std::sync::{Arc, MutexGuard};
 
 use memmap::Mmap;
 
-use crate::db::{DBInner, ALLOC_SIZE};
+use crate::db::{DBInner, MIN_ALLOC_SIZE};
 use crate::meta::Meta;
 use crate::page::{Page, PageID};
 use crate::bucket::{Bucket};
@@ -162,7 +162,7 @@ impl<'a> TransactionInner {
 		let current_size = file.metadata()?.len();
 		if current_size < required_size {
 			let size_diff = required_size - current_size;
-			let alloc_size = ((size_diff / ALLOC_SIZE) + 1) * ALLOC_SIZE;
+			let alloc_size = ((size_diff / MIN_ALLOC_SIZE) + 1) * MIN_ALLOC_SIZE;
 			self.db.resize(file, current_size + alloc_size)?;
 		}
 
@@ -218,6 +218,7 @@ impl<'a> TransactionInner {
 		}
 
 		file.flush()?;
+		file.sync_all()?;
 
 		self.db.freelist = self.freelist.clone();
 		Ok(())
