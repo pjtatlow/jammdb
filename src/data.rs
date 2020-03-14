@@ -15,8 +15,8 @@ pub enum Data {
 impl Data {
 	pub (crate) fn from_leaf(l: &LeafElement) -> Data {
 		match l.node_type {
-			Node::TYPE_DATA => KVPair::new(l.key(), l.value()),
-			Node::TYPE_BUCKET => BucketData::new(l.key(), l.value()),
+			Node::TYPE_DATA => Data::KeyValue(KVPair::new(l.key(), l.value())),
+			Node::TYPE_BUCKET => Data::Bucket(BucketData::new(l.key(), l.value())),
 			_ => panic!("INVALID NODE TYPE"),
 		}
 	}
@@ -64,23 +64,22 @@ pub struct BucketData {
 }
 
 impl BucketData {
-	pub (crate) fn new(name: &[u8], meta: &[u8]) -> Data {
-		let b = BucketData{
+	pub (crate) fn new(name: &[u8], meta: &[u8]) -> Self {
+		BucketData{
 			name: SliceParts::from_slice(name),
 			meta: SliceParts::from_slice(meta),
-		};
-		Data::Bucket(b)
+		}
 	}
 
-	pub (crate) fn from_slice_parts(name: SliceParts, meta: SliceParts) -> Data {
-		Data::Bucket(BucketData{name, meta})
+	pub (crate) fn from_slice_parts(name: SliceParts, meta: SliceParts) -> Self {
+		BucketData{name, meta}
 	}
 
-	pub (crate) fn from_meta(name: SliceParts, meta: &BucketMeta) -> Data {
-		Data::Bucket(BucketData{
+	pub (crate) fn from_meta(name: SliceParts, meta: &BucketMeta) -> Self {
+		BucketData{
 			name,
 			meta: SliceParts::from_slice(meta.as_ref()),
-		})
+		}
 	}
 
 	pub fn name(&self) -> &[u8] {
@@ -88,6 +87,7 @@ impl BucketData {
 	}
 
 	pub (crate) fn meta(&self) -> BucketMeta {
+		#[allow(clippy::cast_ptr_alignment)]
 		unsafe{ *(self.meta.ptr as *const BucketMeta) }
 	}
 
@@ -103,15 +103,15 @@ pub struct KVPair{
 }
 
 impl KVPair {
-	fn new(key: &[u8], value: &[u8]) -> Data {
-		Data::KeyValue(KVPair{
+	fn new(key: &[u8], value: &[u8]) -> Self {
+		KVPair{
 			key: SliceParts::from_slice(key),
 			value: SliceParts::from_slice(value),
-		})
+		}
 	}
 
-	pub (crate) fn from_slice_parts(key: SliceParts, value: SliceParts) -> Data {
-		Data::KeyValue(KVPair{key, value})
+	pub (crate) fn from_slice_parts(key: SliceParts, value: SliceParts) -> Self {
+		KVPair{key, value}
 	}
 
 	pub fn key(&self) -> &[u8] {
@@ -140,7 +140,7 @@ impl SliceParts {
 		if len > 0 {
 			ptr = &s[0] as *const u8;
 		} else {
-			ptr = 0 as *const u8;
+			ptr = std::ptr::null::<u8>();
 		}
 		SliceParts{
 			ptr,
@@ -224,17 +224,17 @@ mod tests {
 		let s2 = vec![41,85,142];
 		let other_parts = SliceParts::from_slice(s2.as_slice());
 		assert_eq!(parts.partial_cmp(&other_parts), Some(Ordering::Greater));
-		assert!(parts.eq(&other_parts) == false);
+		assert!(!parts.eq(&other_parts));
 		
 		let s2 = vec![43,1,200];
 		let other_parts = SliceParts::from_slice(s2.as_slice());
 		assert_eq!(parts.partial_cmp(&other_parts), Some(Ordering::Less));
-		assert!(parts.eq(&other_parts) == false);
+		assert!(!parts.eq(&other_parts));
 		
 		let s2 = vec![42, 84, 126];
 		let other_parts = SliceParts::from_slice(s2.as_slice());
 		assert_eq!(parts.partial_cmp(&other_parts), Some(Ordering::Equal));
-		assert!(parts.eq(&other_parts) == true);
+		assert!(parts.eq(&other_parts));
 	}
 
 	#[test]
@@ -242,70 +242,49 @@ mod tests {
 		let k = vec![1,2,3,4];
 		let v = vec![5,6,7,8,9,0];
 
-		match KVPair::new(&k, &v) {
-			Data::KeyValue(kv) => {
-				assert_eq!(kv.key(), &k[..]);
-				assert_eq!(kv.value(), &v[..]);
-				assert_eq!(kv.size(), 10);
-			}, 
-			_ => panic!("Expected Data::KeyValue"),
-		}
+		let kv = KVPair::new(&k, &v);
+		assert_eq!(kv.key(), &k[..]);
+		assert_eq!(kv.value(), &v[..]);
+		assert_eq!(kv.size(), 10);
 
-		match KVPair::from_slice_parts(SliceParts::from_slice(&k), SliceParts::from_slice(&v)) {
-			Data::KeyValue(kv) => {
-				assert_eq!(kv.key(), &k[..]);
-				assert_eq!(kv.value(), &v[..]);
-				assert_eq!(kv.size(), 10);
-			}, 
-			_ => panic!("Expected Data::KeyValue"),
-		}
+		let kv = KVPair::from_slice_parts(SliceParts::from_slice(&k), SliceParts::from_slice(&v));
+		assert_eq!(kv.key(), &k[..]);
+		assert_eq!(kv.value(), &v[..]);
+		assert_eq!(kv.size(), 10);
 
 	}
 
 	#[test]
 	fn test_bucket_data() {
-		let name = "Hello Bucket!".as_bytes();
-		let mut meta = BucketMeta{root_page: 3, sequence: 24985738796};
+		let name = b"Hello Bucket!";
+		let mut meta = BucketMeta{root_page: 3, sequence: 24_985_738_796};
 
-		match BucketData::new(name, meta.as_ref()) {
-			Data::Bucket(b) => {
-				assert_eq!(b.name(), name);
-				assert_eq!(b.meta().root_page, meta.root_page);
-				assert_eq!(b.meta().sequence, meta.sequence);
-				assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta));
+		let b = BucketData::new(name, meta.as_ref());
+		assert_eq!(b.name(), name);
+		assert_eq!(b.meta().root_page, meta.root_page);
+		assert_eq!(b.meta().sequence, meta.sequence);
+		assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta));
 
+		meta.sequence += 1;
+		assert_eq!(b.meta().sequence, meta.sequence);
 
-				meta.sequence += 1;
-				assert_eq!(b.meta().sequence, meta.sequence);
-			},
-			_ => panic!("Expected Data::Bucket"),
-		}
+		let b = BucketData::from_slice_parts(SliceParts::from_slice(name), SliceParts::from_slice(meta.as_ref()));
+		assert_eq!(b.name(), name);
+		assert_eq!(b.meta().root_page, meta.root_page);
+		assert_eq!(b.meta().sequence, meta.sequence);
+		assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta));
 
-		match BucketData::from_slice_parts(SliceParts::from_slice(name), SliceParts::from_slice(meta.as_ref())) {
-			Data::Bucket(b) => {
-				assert_eq!(b.name(), name);
-				assert_eq!(b.meta().root_page, meta.root_page);
-				assert_eq!(b.meta().sequence, meta.sequence);
-				assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta));
+		meta.sequence += 1;
+		assert_eq!(b.meta().sequence, meta.sequence);
 
-				meta.sequence += 1;
-				assert_eq!(b.meta().sequence, meta.sequence);
-			},
-			_ => panic!("Expected Data::Bucket"),
-		}
+		let b = BucketData::from_meta(SliceParts::from_slice(name), &meta);
+		assert_eq!(b.name(), name);
+		assert_eq!(b.meta().root_page, meta.root_page);
+		assert_eq!(b.meta().sequence, meta.sequence);
+		assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta));
 
-		match BucketData::from_meta(SliceParts::from_slice(name), &meta) {
-			Data::Bucket(b) => {
-				assert_eq!(b.name(), name);
-				assert_eq!(b.meta().root_page, meta.root_page);
-				assert_eq!(b.meta().sequence, meta.sequence);
-				assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta));
-
-				meta.sequence += 1;
-				assert_eq!(b.meta().sequence, meta.sequence);
-			},
-			_ => panic!("Expected Data::Bucket"),
-		}
+		meta.sequence += 1;
+		assert_eq!(b.meta().sequence, meta.sequence);
 	}
 
 	#[test]
@@ -313,7 +292,7 @@ mod tests {
 		let k = vec![1,2,3,4,5,6,7,8];
 		let v = vec![11,22,33,44,55,66,77,88];
 
-		let data: Data = KVPair::new(&k, &v);
+		let data: Data = Data::KeyValue(KVPair::new(&k, &v));
 
 		assert_eq!(data.node_type(), Node::TYPE_DATA);
 		assert_eq!(data.key_parts(), SliceParts::from_slice(&k));
@@ -321,8 +300,8 @@ mod tests {
 		assert_eq!(data.value(), &v[..]);
 		assert_eq!(data.size(), 16);
 
-		let meta = BucketMeta{root_page: 456, sequence: 8888888};
-		let data: Data = BucketData::new(&k, meta.as_ref());
+		let meta = BucketMeta{root_page: 456, sequence: 8_888_888};
+		let data: Data = Data::Bucket(BucketData::new(&k, meta.as_ref()));
 
 		assert_eq!(data.node_type(), Node::TYPE_BUCKET);
 		assert_eq!(data.key_parts(), SliceParts::from_slice(&k));

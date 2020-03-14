@@ -181,6 +181,8 @@ impl<'a> TransactionInner {
 			let size = self.freelist.size();
 
 			let mut buf = vec![0; size];
+
+			#[allow(clippy::cast_ptr_alignment)]
 			let mut page = unsafe {&mut *(&mut buf[0] as *mut u8 as *mut Page)};
 						
 			page.id = page_id;
@@ -197,6 +199,8 @@ impl<'a> TransactionInner {
 		// write meta page to file
 		{
 			let mut buf = vec![0; self.db.pagesize];
+
+			#[allow(clippy::cast_ptr_alignment)]
 			let mut page = unsafe {&mut *(&mut buf[0] as *mut u8 as *mut Page)};
 			
 			let meta_page_id = if self.meta.meta_page == 0 { 1 } else { 0 };

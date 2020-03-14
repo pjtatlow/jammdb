@@ -91,7 +91,7 @@ impl PageNode {
 			},
 			PageNode::Node(n) => {
 				match &n.data {
-					NodeData::Leaves(l) => l.get(index).map(|l| l.clone()),
+					NodeData::Leaves(l) => l.get(index).cloned(),
 					_ => panic!("INVALID NODE TYPE FOR VAL"),
 				}
 			},
@@ -163,7 +163,7 @@ impl Cursor {
 	}
 
 	pub fn seek_first(&mut self) {
-		if self.stack.len() == 0 {
+		if self.stack.is_empty() {
 			let page_node = self.bucket.page_node(self.bucket.meta.root_page);
 			self.stack.push(Elem{index: 0, page_node});
 		}
@@ -185,7 +185,7 @@ impl Iterator for Cursor {
     type Item = Data;
 
     fn next(&mut self) -> Option<Self::Item> {
-		if self.stack.len() == 0 {
+		if self.stack.is_empty() {
 			self.seek_first();
 		} else {
 			loop {

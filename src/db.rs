@@ -14,7 +14,7 @@ use crate::bucket::{BucketMeta};
 use crate::transaction::Transaction;
 use crate::freelist::Freelist;
 
-const MAGIC_VALUE: u32 = 0xABCDEF;
+const MAGIC_VALUE: u32 = 0x00AB_CDEF;
 const VERSION: u32 = 1;
 
 // Minimum number of bytes to allocate when growing the databse
@@ -28,21 +28,27 @@ pub struct OpenOptions {
 	num_pages: usize,
 }
 
-impl OpenOptions {
-	pub fn new() -> OpenOptions {
+impl Default for OpenOptions {
+	fn default() -> Self {
 		let pagesize = getPageSize();
 		OpenOptions{
 			pagesize,
 			num_pages: DEFAULT_NUM_PAGES,
 		}
 	}
+}
 
-	pub fn pagesize(mut self, pagesize: usize) -> OpenOptions {
+impl OpenOptions {
+	pub fn new() -> Self {
+		Self::default()
+	}
+
+	pub fn pagesize(mut self, pagesize: usize) -> Self {
 		self.pagesize = pagesize;
 		self
 	}
 
-	pub fn num_pages(mut self, num_pages: usize) -> OpenOptions {
+	pub fn num_pages(mut self, num_pages: usize) -> Self {
 		if num_pages < 4 {
 			panic!("Must have 4 or more pages minimum");
 		}
@@ -117,7 +123,7 @@ impl DBInner {
 		
 		let free_pages = Page::from_buf(&db.data, meta.freelist_page, pagesize as usize).freelist();
 
-		if free_pages.len() > 0 {
+		if !free_pages.is_empty() {
 			db.freelist.init(free_pages);
 		}
 
@@ -165,6 +171,7 @@ fn init_file(path: &Path, pagesize: usize, num_pages: usize) -> Result<File> {
 	let mut buf = vec![0; pagesize * 4];
 	
 	let mut get_page = |index: usize| {
+		#[allow(clippy::cast_ptr_alignment)]
 		unsafe {&mut *(&mut buf[index * pagesize] as *mut u8 as *mut Page)}
 	};
 	
@@ -193,7 +200,7 @@ fn init_file(path: &Path, pagesize: usize, num_pages: usize) -> Result<File> {
 	p.page_type = Page::TYPE_LEAF;
 	p.count = 0;
 
-	file.write(&buf[..])?;
+	file.write_all(&buf[..])?;
 	file.flush()?;
 	file.sync_all()?;
 	Ok(file)
@@ -212,7 +219,7 @@ mod tests {
 				.take(30)
 				.collect();
 			let path = std::env::temp_dir().join(filename);
-			if let Err(_) =  path.metadata() {
+			if path.metadata().is_err() {
 				return path
 			}
 		}
@@ -232,7 +239,7 @@ mod tests {
 			assert_eq!(metadata.len(), 50000);
 		}
 		{
-			let db = OpenOptions::new().pagesize(500).num_pages(100).open(path.clone()).unwrap();
+			let db = OpenOptions::new().pagesize(500).num_pages(100).open(path).unwrap();
 			assert_eq!(db.pagesize(), 500);
 		}
 	}

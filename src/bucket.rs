@@ -18,23 +18,19 @@ pub struct Bucket {
 	// page: Option<Ptr<Page>>,
 	// node: Option<NodeID>,
 	buckets: HashMap<Vec<u8>, Pin<Box<Bucket>>>,
-	nodes: Vec<Box<Node>>,
+	nodes: Vec<Pin<Box<Node>>>,
 	page_node_ids: HashMap<PageID, NodeID>,
 	page_parents: HashMap<PageID, PageID>,
 }
 
 impl Bucket {
 	pub (crate) fn root(tx: Ptr<TransactionInner>) -> Bucket {
-		// println!("A: {:?} {:?}", tx.0, tx.meta.root);
-		let meta = tx.meta.root.clone();
-		// println!("B: {:?} {:?}", tx.0, meta);
+		let meta = tx.meta.root;
 		Bucket{
 			tx,
 			meta,
 			root: PageNodeID::Page(meta.root_page),
 			dirty: false,
-			// page: None,
-			// node: None,
 			buckets: HashMap::new(),
 			nodes: Vec::new(),
 			page_node_ids: HashMap::new(),
@@ -42,7 +38,7 @@ impl Bucket {
 		}
 	}
 
-	fn new_child(&mut self, name: &Vec<u8>) {
+	fn new_child(&mut self, name: &[u8]) {
 		let b = Bucket{
 			tx: Ptr::new(&self.tx),
 			meta: BucketMeta::default(),
@@ -53,19 +49,19 @@ impl Bucket {
 			page_node_ids: HashMap::new(),
 			page_parents: HashMap::new(),
 		};
-		self.buckets.insert(name.clone(), Pin::new(Box::new(b)));
+		self.buckets.insert(Vec::from(name), Pin::new(Box::new(b)));
 		let b = self.buckets.get_mut(name).unwrap();
 		
 		let n = Node::new(0, Page::TYPE_LEAF, Ptr::new(b));
 
-		b.nodes.push(Box::new(n));
+		b.nodes.push(Pin::new(Box::new(n)));
 		b.page_node_ids.insert(0,0);
 	}
 
 	pub (crate) fn new_node(&mut self, data: NodeData) -> &mut Node {
 		let node_id = self.nodes.len();
 		let n = Node::with_data(node_id, data, Ptr::new(self));
-		self.nodes.push(Box::new(n));
+		self.nodes.push(Pin::new(Box::new(n)));
 		self.nodes.get_mut(node_id).unwrap()
 	}
 
@@ -125,7 +121,7 @@ impl Bucket {
 		{
 			let b = self.buckets.get(&key).unwrap();
 			let key = self.tx.copy_data(name);
-			data = BucketData::from_meta(key, &b.meta);
+			data = Data::Bucket(BucketData::from_meta(key, &b.meta));
 		}
 
 		let node = self.node(c.current_id());
@@ -151,7 +147,7 @@ impl Bucket {
 		}
 		let k = self.tx.copy_data(key.as_ref());
 		let v = self.tx.copy_data(value.as_ref());
-		self.put_data(KVPair::from_slice_parts(k, v));
+		self.put_data(Data::KeyValue(KVPair::from_slice_parts(k, v)));
 		Ok(())
 	}
 
@@ -190,7 +186,7 @@ impl Bucket {
 				let node_id = self.nodes.len();
 				self.page_node_ids.insert(page_id, node_id);
 				let n: Node = Node::from_page(node_id, Ptr::new(self), self.tx.page(page_id));
-				self.nodes.push(Box::new(n));
+				self.nodes.push(Pin::new(Box::new(n)));
 				if self.meta.root_page != page_id {
 					let node_key = self.nodes[node_id].data.key_parts();
 					let parent = self.node(PageNodeID::Page(self.page_parents[&page_id]));
@@ -215,7 +211,7 @@ impl Bucket {
 		for (k, b) in bucket_metas {
 			let name = self.tx.copy_data(&k[..]);
 			let meta = self.tx.copy_data(b.as_ref());
-			self.put_data(BucketData::from_slice_parts(name, meta));
+			self.put_data(Data::Bucket(BucketData::from_slice_parts(name, meta)));
 		}
 		let mut root_id = self.root;
 		if self.dirty {

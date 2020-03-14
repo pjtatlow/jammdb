@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 mod db;
 mod errors;
 mod bucket;

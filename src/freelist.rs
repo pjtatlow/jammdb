@@ -26,7 +26,7 @@ impl Freelist {
 
 	// adds the page to the transaction's set of free pages
 	pub (crate) fn free(&mut self, tx_id: u64, page_id: PageID) {
-		let pages = self.pending_pages.entry(tx_id).or_insert(Vec::new());
+		let pages = self.pending_pages.entry(tx_id).or_insert_with(Vec::new);
 		pages.push(page_id);
 	}
 
@@ -44,7 +44,7 @@ impl Freelist {
 	}
 
 	pub (crate) fn allocate(&mut self, num_pages: usize) -> Option<PageID> {
-		if self.free_pages.len() == 0 {
+		if self.free_pages.is_empty() {
 			return None;
 		}
 		let mut start: PageID = 0;
@@ -74,13 +74,13 @@ impl Freelist {
 			return Some(found);
 		}
 
-		return None;
+		None
 	}
 
 	pub (crate) fn pages(&self) -> Vec<PageID> {
 		let mut page_ids: Vec<PageID> = self.free_pages.iter().cloned().collect();
 		for (_, pages) in self.pending_pages.iter() {
-			let mut pages = pages.iter().cloned().collect();
+			let mut pages = pages.to_vec();
 			page_ids.append(&mut pages);
 		}
 		page_ids.sort_unstable();

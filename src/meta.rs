@@ -49,8 +49,8 @@ mod tests {
 	fn test_meta() {
 		let mut meta = Meta{
 			meta_page: 1,
-			magic: 1234567890,
-			version: 987654321,
+			magic: 1_234_567_890,
+			version: 987_654_321,
 			pagesize: 4096,
 			root: BucketMeta{root_page: 2, sequence: 2020},
 			num_pages: 13,
@@ -59,9 +59,9 @@ mod tests {
 			hash: [0; 32],
 		};
 
-		assert!(meta.valid() == false);
+		assert!(!meta.valid());
 		meta.hash = meta.hash_self();
-		assert!(meta.valid() == true);
+		assert!(meta.valid());
 		assert_eq!(meta.hash, meta.hash_self());
 		// modify the last property before the hash
 		// to change the hash
@@ -69,7 +69,7 @@ mod tests {
 		assert_ne!(meta.hash, meta.hash_self());
 		// reset hash and make sure it is still valid
 		meta.hash = meta.hash_self();
-		assert!(meta.valid() == true);
+		assert!(meta.valid());
 		assert_eq!(meta.hash, meta.hash_self());
 	}
 

@@ -180,7 +180,7 @@ impl Node {
 	pub (crate) fn insert_child(&mut self, id: NodeID, key: SliceParts) {
 		match &mut self.data {
 			NodeData::Branches(branches) => {
-				debug_assert!(self.children.contains(&id) == false);
+				debug_assert!(!self.children.contains(&id));
 				debug_assert!(branches.binary_search_by_key(&key.slice(), |b| &b.key()).is_ok());
 				self.children.push(id);
 			},
@@ -195,6 +195,8 @@ impl Node {
 	pub (crate) fn write(&mut self, file: &mut File) -> Result<()> {
 		let size = self.size();
 		let mut buf: Vec<u8> = vec![0; size];
+		
+		#[allow(clippy::cast_ptr_alignment)]
 		let page = unsafe {&mut *(&mut buf[0] as *mut u8 as *mut Page)};
 		page.write_node(self, self.num_pages)?;
 		let offset = (self.page_id as u64) * (self.bucket.tx.meta.pagesize as u64);
@@ -228,7 +230,7 @@ impl Node {
 			if let NodeData::Branches(branches) = &mut self.data {
 				match &branches[last_branch_index..].binary_search_by_key(&child.data.key_parts().slice(), |b| b.key()) {
 					Ok(i) => last_branch_index = *i,
-					Err(_) => panic!("THIS IS VERY VERY BAD"),
+					_ => panic!("THIS IS VERY VERY BAD"),
 				}
 				branches[last_branch_index] = Branch::from_node(&child);
 				if let Some(mut new_branches) = new_branches {
@@ -277,7 +279,7 @@ impl Node {
 			},
 		};
 		// for some reason we didn't find a place to split
-		if split_indexes.len() == 0 {
+		if split_indexes.is_empty() {
 			self.allocate();
 			return None;
 		}

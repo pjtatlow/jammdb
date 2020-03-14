@@ -1,6 +1,5 @@
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 use std::mem::size_of;
-use std::io::IoSlice;
 use std::io::Write;
 
 use crate::meta::Meta;
@@ -32,6 +31,7 @@ impl Page {
 
 	#[inline]
 	pub (crate) fn from_buf(buf: &[u8], id: PageID, pagesize: usize) -> &Page {
+		#[allow(clippy::cast_ptr_alignment)]
 		unsafe {&*(&buf[id * pagesize] as *const u8 as *const Page)}
 	}
 
@@ -77,7 +77,7 @@ impl Page {
 		}
 	}
 
-	pub (crate) fn leaf_elements_mut(&self) -> &mut[LeafElement] {
+	pub (crate) fn leaf_elements_mut(&mut self) -> &mut[LeafElement] {
 		assert_type(self.page_type, Page::TYPE_LEAF);
 		unsafe{
 			let start = &self.ptr as *const usize as *const LeafElement as *mut LeafElement;
@@ -85,7 +85,7 @@ impl Page {
 		}		
 	}
 
-	pub (crate) fn branch_elements_mut(&self) -> &mut[BranchElement] {
+	pub (crate) fn branch_elements_mut(&mut self) -> &mut[BranchElement] {
 		assert_type(self.page_type, Page::TYPE_BRANCH);
 		unsafe{
 			let start = &self.ptr as *const usize as *const BranchElement as *mut BranchElement;
@@ -93,7 +93,7 @@ impl Page {
 		}
 	}
 
-	fn slice(&self, size: usize) -> &mut [u8] {
+	fn slice(&mut self, size: usize) -> &mut [u8] {
 		unsafe{
 			let start = &self.ptr as *const usize as *const u8 as *mut u8;
 			from_raw_parts_mut(start, size)
@@ -106,7 +106,7 @@ impl Page {
 		self.overflow = num_pages - 1;
 		let header_size;
 		let mut data_size = 0;
-		let mut data: Vec<IoSlice>;
+		let mut data: Vec<&[u8]>;
 		match &n.data {
 			NodeData::Branches(branches) => {
 				self.page_type = Page::TYPE_BRANCH;
@@ -121,7 +121,7 @@ impl Page {
 					elem.pos = header_offsets + data_size;
 					data_size += elem.key_size;
 					header_offsets -= header_size;
-					data.push(IoSlice::new(b.key()));
+					data.push(b.key());
 				};
 			},
 			NodeData::Leaves(leaves) => {
@@ -142,15 +142,17 @@ impl Page {
 					data_size += elem.key_size + elem.value_size;
 					header_offsets -= header_size;
 
-					data.push(IoSlice::new(key));
-					data.push(IoSlice::new(value));
+					data.push(key);
+					data.push(value);
 				};				
 			},
 		};
 		let total_header = header_size * self.count;
 		let buf = self.slice(total_header + data_size);
 		let mut buf = &mut buf[total_header..];
-		buf.write_vectored(data.as_slice())?;
+		for b in data.iter() {
+			buf.write_all(b)?;
+		}
 		Ok(())
 	}
 
