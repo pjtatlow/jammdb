@@ -1,16 +1,16 @@
-use crate::ptr::Ptr;
-use crate::bucket::{Bucket};
-use crate::page::{Page, PageID};
-use crate::node::{Node, NodeID, NodeData};
+use crate::bucket::Bucket;
 use crate::data::Data;
+use crate::node::{Node, NodeData, NodeID};
+use crate::page::{Page, PageID};
+use crate::ptr::Ptr;
 
 #[derive(Clone, Copy)]
-pub (crate) enum PageNodeID {
+pub(crate) enum PageNodeID {
 	Page(PageID),
 	Node(NodeID),
 }
 
-pub (crate) enum PageNode {
+pub(crate) enum PageNode {
 	Page(Ptr<Page>),
 	Node(Ptr<Node>),
 }
@@ -40,33 +40,29 @@ impl PageNode {
 					Page::TYPE_BRANCH => p.branch_elements()[index].page,
 					_ => panic!("INVALID PAGE TYPE FOR INDEX_PAGE"),
 				}
-			},
+			}
 			PageNode::Node(n) => {
 				if index >= n.data.len() {
 					return 0;
-				}				
+				}
 				match &n.data {
 					NodeData::Branches(b) => b[index].page,
 					_ => panic!("INVALID NODE TYPE FOR INDEX_PAGE"),
 				}
-			},
+			}
 		}
 	}
 
 	fn index(&self, key: &[u8]) -> (usize, bool) {
 		let result = match self {
-			PageNode::Page(p) => {
-				match p.page_type {
-					Page::TYPE_LEAF => p.leaf_elements().binary_search_by_key(&key, |e| e.key()),
-					Page::TYPE_BRANCH => p.branch_elements().binary_search_by_key(&key, |e| e.key()),
-					_ => panic!("INVALID PAGE TYPE FOR INDEX: {:?}", p.page_type),
-				}
+			PageNode::Page(p) => match p.page_type {
+				Page::TYPE_LEAF => p.leaf_elements().binary_search_by_key(&key, |e| e.key()),
+				Page::TYPE_BRANCH => p.branch_elements().binary_search_by_key(&key, |e| e.key()),
+				_ => panic!("INVALID PAGE TYPE FOR INDEX: {:?}", p.page_type),
 			},
-			PageNode::Node(n) => {
-				match &n.data {
-					NodeData::Branches(b) => b.binary_search_by_key(&key, |b| b.key()),
-					NodeData::Leaves(l) => l.binary_search_by_key(&key, |l| l.key()),
-				}
+			PageNode::Node(n) => match &n.data {
+				NodeData::Branches(b) => b.binary_search_by_key(&key, |b| b.key()),
+				NodeData::Leaves(l) => l.binary_search_by_key(&key, |l| l.key()),
 			},
 		};
 		match result {
@@ -77,23 +73,19 @@ impl PageNode {
 					i -= 1;
 				};
 				(i, false)
-			},
+			}
 		}
 	}
 
 	fn val(&self, index: usize) -> Option<Data> {
 		match self {
-			PageNode::Page(p) => {
-				match p.page_type {
-					Page::TYPE_LEAF => p.leaf_elements().get(index).map(|e| Data::from_leaf(e)),
-					_ => panic!("INVALID PAGE TYPE FOR VAL"),
-				}
+			PageNode::Page(p) => match p.page_type {
+				Page::TYPE_LEAF => p.leaf_elements().get(index).map(|e| Data::from_leaf(e)),
+				_ => panic!("INVALID PAGE TYPE FOR VAL"),
 			},
-			PageNode::Node(n) => {
-				match &n.data {
-					NodeData::Leaves(l) => l.get(index).cloned(),
-					_ => panic!("INVALID NODE TYPE FOR VAL"),
-				}
+			PageNode::Node(n) => match &n.data {
+				NodeData::Leaves(l) => l.get(index).cloned(),
+				_ => panic!("INVALID NODE TYPE FOR VAL"),
 			},
 		}
 	}
@@ -105,14 +97,14 @@ pub struct Cursor {
 }
 
 impl Cursor {
-	pub (crate) fn new(b: Ptr<Bucket>) -> Cursor {
-		Cursor{
+	pub(crate) fn new(b: Ptr<Bucket>) -> Cursor {
+		Cursor {
 			bucket: b,
 			stack: vec![],
 		}
 	}
 
-	pub (crate) fn current_id(&self) -> PageNodeID {
+	pub(crate) fn current_id(&self) -> PageNodeID {
 		let e = self.stack.last().unwrap();
 		match &e.page_node {
 			PageNode::Page(p) => PageNodeID::Page(p.id),
@@ -147,8 +139,7 @@ impl Cursor {
 		let page_node = self.bucket.page_node(page_id);
 		let (index, exact) = page_node.index(key);
 		let leaf = page_node.leaf();
-		self.stack.push(Elem{index, page_node});
-		
+		self.stack.push(Elem { index, page_node });
 		if leaf {
 			return exact;
 		}
@@ -165,7 +156,10 @@ impl Cursor {
 	pub fn seek_first(&mut self) {
 		if self.stack.is_empty() {
 			let page_node = self.bucket.page_node(self.bucket.meta.root_page);
-			self.stack.push(Elem{index: 0, page_node});
+			self.stack.push(Elem {
+				index: 0,
+				page_node,
+			});
 		}
 		loop {
 			let elem = self.stack.last().unwrap();
@@ -176,15 +170,18 @@ impl Cursor {
 				break;
 			}
 			let page_node = self.bucket.page_node(elem.page_node.index_page(elem.index));
-			self.stack.push(Elem{index: 0, page_node});
+			self.stack.push(Elem {
+				index: 0,
+				page_node,
+			});
 		}
 	}
 }
 
 impl Iterator for Cursor {
-    type Item = Data;
+	type Item = Data;
 
-    fn next(&mut self) -> Option<Self::Item> {
+	fn next(&mut self) -> Option<Self::Item> {
 		if self.stack.is_empty() {
 			self.seek_first();
 		} else {

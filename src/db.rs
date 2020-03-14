@@ -1,24 +1,24 @@
-use std::io::Write;
 use std::fs::{File, OpenOptions as FileOpenOptions};
-use std::sync::{Arc, Mutex};
+use std::io::Write;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use fs2::FileExt;
 use memmap::Mmap;
-use page_size::{get as getPageSize};
+use page_size::get as getPageSize;
 
-use crate::meta::{Meta};
-use crate::page::{Page};
-use crate::errors::{Result};
-use crate::bucket::{BucketMeta};
-use crate::transaction::Transaction;
+use crate::bucket::BucketMeta;
+use crate::errors::Result;
 use crate::freelist::Freelist;
+use crate::meta::Meta;
+use crate::page::Page;
+use crate::transaction::Transaction;
 
 const MAGIC_VALUE: u32 = 0x00AB_CDEF;
 const VERSION: u32 = 1;
 
 // Minimum number of bytes to allocate when growing the databse
-pub (crate) const MIN_ALLOC_SIZE: u64 = 8 * 1024 * 1024;
+pub(crate) const MIN_ALLOC_SIZE: u64 = 8 * 1024 * 1024;
 
 // Number of pages to allocate when creating the database
 const DEFAULT_NUM_PAGES: usize = 32;
@@ -31,7 +31,7 @@ pub struct OpenOptions {
 impl Default for OpenOptions {
 	fn default() -> Self {
 		let pagesize = getPageSize();
-		OpenOptions{
+		OpenOptions {
 			pagesize,
 			num_pages: DEFAULT_NUM_PAGES,
 		}
@@ -61,16 +61,12 @@ impl OpenOptions {
 		let file = if !path.exists() {
 			init_file(path, self.pagesize, self.num_pages)?
 		} else {
-			FileOpenOptions::new()
-				.read(true)
-				.write(true)
-				.open(path)?
+			FileOpenOptions::new().read(true).write(true).open(path)?
 		};
 
 		let db = DBInner::open(file, self.pagesize)?;
-		Ok(DB(Arc::new(db)))			
+		Ok(DB(Arc::new(db)))
 	}
-	
 }
 
 #[derive(Clone)]
@@ -90,25 +86,24 @@ impl DB {
 	}
 }
 
-pub (crate) struct DBInner {
-	pub (crate) data: Arc<Mmap>,
-	pub (crate) freelist: Freelist,
+pub(crate) struct DBInner {
+	pub(crate) data: Arc<Mmap>,
+	pub(crate) freelist: Freelist,
 
-	pub (crate) file: Mutex<File>,
-	pub (crate) mmap_lock: Mutex<()>,
-	pub (crate) open_ro_txs: Mutex<Vec<u64>>,
+	pub(crate) file: Mutex<File>,
+	pub(crate) mmap_lock: Mutex<()>,
+	pub(crate) open_ro_txs: Mutex<Vec<u64>>,
 
-	pub (crate) pagesize: usize,
+	pub(crate) pagesize: usize,
 }
 
 impl DBInner {
-
-	pub (crate) fn open(file: File, pagesize: usize) -> Result<DBInner> {
+	pub(crate) fn open(file: File, pagesize: usize) -> Result<DBInner> {
 		file.lock_exclusive()?;
 
 		let mmap = unsafe { Arc::new(Mmap::map(&file)?) };
 
-		let mut db = DBInner{
+		let mut db = DBInner {
 			data: mmap,
 			freelist: Freelist::new(),
 
@@ -120,7 +115,6 @@ impl DBInner {
 		};
 
 		let meta = db.meta();
-		
 		let free_pages = Page::from_buf(&db.data, meta.freelist_page, pagesize as usize).freelist();
 
 		if !free_pages.is_empty() {
@@ -130,7 +124,7 @@ impl DBInner {
 		Ok(db)
 	}
 
-	pub (crate) fn resize(&mut self, file: &File, new_size: u64) -> Result<()> {
+	pub(crate) fn resize(&mut self, file: &File, new_size: u64) -> Result<()> {
 		file.allocate(new_size)?;
 		let _lock = self.mmap_lock.lock()?;
 		let mmap = unsafe { Mmap::map(file).unwrap() };
@@ -138,27 +132,47 @@ impl DBInner {
 		Ok(())
 	}
 
-	pub (crate) fn meta(&self) -> Meta {
+	pub(crate) fn meta(&self) -> Meta {
 		let meta1 = Page::from_buf(&self.data, 0, self.pagesize).meta();
 		let meta2 = Page::from_buf(&self.data, 1, self.pagesize).meta();
 		match (meta1.valid(), meta2.valid()) {
 			(true, true) => {
-				assert_eq!(meta1.pagesize as usize, self.pagesize, "Invalid pagesize from meta1 {}. Expected {}.", meta1.pagesize, self.pagesize);
-				assert_eq!(meta2.pagesize as usize, self.pagesize, "Invalid pagesize from meta2 {}. Expected {}.", meta2.pagesize, self.pagesize);
-				if meta1.tx_id > meta2.tx_id { meta1 } else { meta2 }
-			},
+				assert_eq!(
+					meta1.pagesize as usize, self.pagesize,
+					"Invalid pagesize from meta1 {}. Expected {}.",
+					meta1.pagesize, self.pagesize
+				);
+				assert_eq!(
+					meta2.pagesize as usize, self.pagesize,
+					"Invalid pagesize from meta2 {}. Expected {}.",
+					meta2.pagesize, self.pagesize
+				);
+				if meta1.tx_id > meta2.tx_id {
+					meta1
+				} else {
+					meta2
+				}
+			}
 			(true, false) => {
-				assert_eq!(meta1.pagesize as usize, self.pagesize, "Invalid pagesize from meta1 {}. Expected {}.", meta1.pagesize, self.pagesize);
+				assert_eq!(
+					meta1.pagesize as usize, self.pagesize,
+					"Invalid pagesize from meta1 {}. Expected {}.",
+					meta1.pagesize, self.pagesize
+				);
 				meta1
-			},
+			}
 			(false, true) => {
-				assert_eq!(meta2.pagesize as usize, self.pagesize, "Invalid pagesize from meta2 {}. Expected {}.", meta2.pagesize, self.pagesize);
-				meta2				
-			},
+				assert_eq!(
+					meta2.pagesize as usize, self.pagesize,
+					"Invalid pagesize from meta2 {}. Expected {}.",
+					meta2.pagesize, self.pagesize
+				);
+				meta2
+			}
 			(false, false) => panic!("NO VALID META PAGES"),
-		}.clone()
+		}
+		.clone()
 	}
-
 }
 
 fn init_file(path: &Path, pagesize: usize, num_pages: usize) -> Result<File> {
@@ -169,12 +183,12 @@ fn init_file(path: &Path, pagesize: usize, num_pages: usize) -> Result<File> {
 		.open(path)?;
 	file.allocate((pagesize * num_pages) as u64)?;
 	let mut buf = vec![0; pagesize * 4];
-	
 	let mut get_page = |index: usize| {
 		#[allow(clippy::cast_ptr_alignment)]
-		unsafe {&mut *(&mut buf[index * pagesize] as *mut u8 as *mut Page)}
+		unsafe {
+			&mut *(&mut buf[index * pagesize] as *mut u8 as *mut Page)
+		}
 	};
-	
 	for i in 0..2 {
 		let page = get_page(i);
 		page.id = i;
@@ -185,7 +199,10 @@ fn init_file(path: &Path, pagesize: usize, num_pages: usize) -> Result<File> {
 		m.version = VERSION;
 		m.pagesize = pagesize as u32;
 		m.freelist_page = 2;
-		m.root = BucketMeta{root_page: 3, sequence: 0};
+		m.root = BucketMeta {
+			root_page: 3,
+			sequence: 0,
+		};
 		m.num_pages = 3;
 		m.hash = m.hash_self();
 	}
@@ -209,8 +226,8 @@ fn init_file(path: &Path, pagesize: usize, num_pages: usize) -> Result<File> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use rand::{distributions::Alphanumeric, Rng};
 	use std::path::PathBuf;
-	use rand::{Rng, distributions::Alphanumeric};
 
 	fn random_file() -> PathBuf {
 		loop {
@@ -220,7 +237,7 @@ mod tests {
 				.collect();
 			let path = std::env::temp_dir().join(filename);
 			if path.metadata().is_err() {
-				return path
+				return path;
 			}
 		}
 	}
@@ -230,7 +247,11 @@ mod tests {
 		assert_ne!(getPageSize(), 500);
 		let path = random_file();
 		{
-			let db = OpenOptions::new().pagesize(500).num_pages(100).open(path.clone()).unwrap();
+			let db = OpenOptions::new()
+				.pagesize(500)
+				.num_pages(100)
+				.open(path.clone())
+				.unwrap();
 			assert_eq!(db.pagesize(), 500);
 		}
 		{
@@ -239,7 +260,11 @@ mod tests {
 			assert_eq!(metadata.len(), 50000);
 		}
 		{
-			let db = OpenOptions::new().pagesize(500).num_pages(100).open(path).unwrap();
+			let db = OpenOptions::new()
+				.pagesize(500)
+				.num_pages(100)
+				.open(path)
+				.unwrap();
 			assert_eq!(db.pagesize(), 500);
 		}
 	}
@@ -250,7 +275,11 @@ mod tests {
 		assert_ne!(getPageSize(), 500);
 		let path = random_file();
 		{
-			let db = OpenOptions::new().pagesize(500).num_pages(100).open(path.clone()).unwrap();
+			let db = OpenOptions::new()
+				.pagesize(500)
+				.num_pages(100)
+				.open(path.clone())
+				.unwrap();
 			assert_eq!(db.pagesize(), 500);
 		}
 		DB::open(path).unwrap();

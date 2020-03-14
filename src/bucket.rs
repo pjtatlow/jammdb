@@ -2,18 +2,18 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::pin::Pin;
 
-use crate::page::{Page, PageID};
-use crate::node::{Node, NodeID, NodeData, Branch};
-use crate::transaction::TransactionInner;
-use crate::ptr::Ptr;
 use crate::cursor::{Cursor, PageNode, PageNodeID};
+use crate::data::{BucketData, Data, KVPair};
 use crate::errors::{Error, Result};
-use crate::data::{Data, BucketData, KVPair};
+use crate::node::{Branch, Node, NodeData, NodeID};
+use crate::page::{Page, PageID};
+use crate::ptr::Ptr;
+use crate::transaction::TransactionInner;
 
 pub struct Bucket {
-	pub (crate) tx: Ptr<TransactionInner>,
-	pub (crate) meta: BucketMeta,
-	pub (crate) root: PageNodeID,
+	pub(crate) tx: Ptr<TransactionInner>,
+	pub(crate) meta: BucketMeta,
+	pub(crate) root: PageNodeID,
 	dirty: bool,
 	// page: Option<Ptr<Page>>,
 	// node: Option<NodeID>,
@@ -24,9 +24,9 @@ pub struct Bucket {
 }
 
 impl Bucket {
-	pub (crate) fn root(tx: Ptr<TransactionInner>) -> Bucket {
+	pub(crate) fn root(tx: Ptr<TransactionInner>) -> Bucket {
 		let meta = tx.meta.root;
-		Bucket{
+		Bucket {
 			tx,
 			meta,
 			root: PageNodeID::Page(meta.root_page),
@@ -39,7 +39,7 @@ impl Bucket {
 	}
 
 	fn new_child(&mut self, name: &[u8]) {
-		let b = Bucket{
+		let b = Bucket {
 			tx: Ptr::new(&self.tx),
 			meta: BucketMeta::default(),
 			root: PageNodeID::Node(0),
@@ -51,14 +51,13 @@ impl Bucket {
 		};
 		self.buckets.insert(Vec::from(name), Pin::new(Box::new(b)));
 		let b = self.buckets.get_mut(name).unwrap();
-		
 		let n = Node::new(0, Page::TYPE_LEAF, Ptr::new(b));
 
 		b.nodes.push(Pin::new(Box::new(n)));
-		b.page_node_ids.insert(0,0);
+		b.page_node_ids.insert(0, 0);
 	}
 
-	pub (crate) fn new_node(&mut self, data: NodeData) -> &mut Node {
+	pub(crate) fn new_node(&mut self, data: NodeData) -> &mut Node {
 		let node_id = self.nodes.len();
 		let n = Node::with_data(node_id, data, Ptr::new(self));
 		self.nodes.push(Pin::new(Box::new(n)));
@@ -66,7 +65,7 @@ impl Bucket {
 	}
 
 	fn from_meta(&self, meta: BucketMeta) -> Bucket {
-		Bucket{
+		Bucket {
 			tx: Ptr::new(&self.tx),
 			meta,
 			root: PageNodeID::Page(meta.root_page),
@@ -94,7 +93,7 @@ impl Bucket {
 						b.meta = data.meta();
 						b.dirty = false;
 						self.buckets.insert(key.clone(), Pin::new(Box::new(b)));
-					},
+					}
 					_ => return Err(Error::IncompatibleValue),
 				},
 				None => return Err(Error::BucketMissing),
@@ -163,7 +162,7 @@ impl Bucket {
 		Cursor::new(Ptr::new(self))
 	}
 
-	pub (crate) fn page_node(&self, page: PageID) -> PageNode {
+	pub(crate) fn page_node(&self, page: PageID) -> PageNode {
 		if let Some(node_id) = self.page_node_ids.get(&page) {
 			PageNode::Node(Ptr::new(self.nodes.get(*node_id).unwrap()))
 		} else {
@@ -171,18 +170,20 @@ impl Bucket {
 		}
 	}
 
-	pub (crate) fn add_page_parent(&mut self, page: PageID, parent: PageID) {
+	pub(crate) fn add_page_parent(&mut self, page: PageID, parent: PageID) {
 		debug_assert!(self.meta.root_page == parent || self.page_parents.contains_key(&parent));
 		self.page_parents.insert(page, parent);
 	}
 
-	pub (crate) fn node(&mut self, id: PageNodeID) -> &mut Node {
+	pub(crate) fn node(&mut self, id: PageNodeID) -> &mut Node {
 		let id: NodeID = match id {
 			PageNodeID::Page(page_id) => {
 				if let Some(node_id) = self.page_node_ids.get(&page_id) {
 					return &mut self.nodes[*node_id as usize];
 				}
-				debug_assert!(self.meta.root_page == page_id || self.page_parents.contains_key(&page_id));
+				debug_assert!(
+					self.meta.root_page == page_id || self.page_parents.contains_key(&page_id)
+				);
 				let node_id = self.nodes.len();
 				self.page_node_ids.insert(page_id, node_id);
 				let n: Node = Node::from_page(node_id, Ptr::new(self), self.tx.page(page_id));
@@ -193,13 +194,13 @@ impl Bucket {
 					parent.insert_child(node_id, node_key);
 				}
 				node_id
-			},
+			}
 			PageNodeID::Node(id) => id,
 		};
 		self.nodes.get_mut(id).unwrap()
 	}
 
-	pub (crate) fn rebalance(&mut self) -> Result<BucketMeta> {
+	pub(crate) fn rebalance(&mut self) -> Result<BucketMeta> {
 		let mut bucket_metas = HashMap::new();
 		for (key, b) in self.buckets.iter_mut() {
 			if b.dirty {
@@ -228,10 +229,10 @@ impl Bucket {
 		Ok(self.meta)
 	}
 
-	pub (crate) fn write(&mut self, file: &mut File) -> Result<()> {
+	pub(crate) fn write(&mut self, file: &mut File) -> Result<()> {
 		for (_, b) in self.buckets.iter_mut() {
 			b.write(file)?;
-		};
+		}
 		if self.dirty {
 			for node in self.nodes.iter_mut() {
 				node.write(file)?;
@@ -246,20 +247,19 @@ impl Bucket {
 	}
 }
 
-
 const META_SIZE: usize = std::mem::size_of::<BucketMeta>();
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
-pub (crate) struct BucketMeta {
-	pub (crate) root_page: PageID,
-	pub (crate) sequence: u64,
+pub(crate) struct BucketMeta {
+	pub(crate) root_page: PageID,
+	pub(crate) sequence: u64,
 }
 
 impl AsRef<[u8]> for BucketMeta {
-    #[inline]
-    fn as_ref(&self) -> &[u8] {
+	#[inline]
+	fn as_ref(&self) -> &[u8] {
 		let ptr = self as *const BucketMeta as *const u8;
-		unsafe{ std::slice::from_raw_parts(ptr, META_SIZE) }
-    }
+		unsafe { std::slice::from_raw_parts(ptr, META_SIZE) }
+	}
 }

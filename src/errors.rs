@@ -1,7 +1,7 @@
 use std::error::Error as StdError;
 use std::fmt;
 
-pub (crate) type Result<T> = std::result::Result<T, Error>;
+pub(crate) type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum Error {
@@ -24,8 +24,8 @@ impl fmt::Display for Error {
             Error::BucketMissing => write!(f, "Bucket does not exist"),
             Error::IncompatibleValue => write!(f, "Value not compatible"),
             Error::ReadOnlyTx => write!(f, "Cannot write in a read-only transaction"),
-			Error::IOError(e) => write!(f, "IO Error: {}", e),
-			Error::SyncError(s) => write!(f, "Sync Error: {}", s),
+            Error::IOError(e) => write!(f, "IO Error: {}", e),
+            Error::SyncError(s) => write!(f, "Sync Error: {}", s),
         }
     }
 }

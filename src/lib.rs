@@ -1,19 +1,18 @@
 #![warn(clippy::all)]
 
-mod db;
-mod errors;
 mod bucket;
-mod page;
-mod meta;
-mod transaction;
-mod ptr;
-mod node;
 mod cursor;
 mod data;
+mod db;
+mod errors;
 mod freelist;
+mod meta;
+mod node;
+mod page;
+mod ptr;
+mod transaction;
 
-pub use db::{DB, OpenOptions};
-pub use transaction::Transaction;
 pub use bucket::Bucket;
+pub use data::*;pub use db::{OpenOptions, DB};
 pub use errors::*;
-pub use data::*;
+pub use transaction::Transaction;

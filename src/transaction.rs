@@ -1,20 +1,20 @@
-use std::pin::Pin;
 use std::fs::File;
 use std::io::Write;
 use std::os::unix::fs::FileExt;
+use std::pin::Pin;
 use std::sync::{Arc, MutexGuard};
 
 use memmap::Mmap;
 
+use crate::bucket::Bucket;
+use crate::data::SliceParts;
 use crate::db::{DBInner, MIN_ALLOC_SIZE};
+use crate::errors::Error;
+use crate::errors::Result;
+use crate::freelist::Freelist;
 use crate::meta::Meta;
 use crate::page::{Page, PageID};
-use crate::bucket::{Bucket};
-use crate::errors::Result;
 use crate::ptr::Ptr;
-use crate::data::SliceParts;
-use crate::errors::Error;
-use crate::freelist::Freelist;
 
 pub struct Transaction<'a> {
 	inner: Pin<Box<TransactionInner>>,
@@ -22,15 +22,16 @@ pub struct Transaction<'a> {
 }
 
 impl<'a> Transaction<'a> {
-	pub (crate) fn new(db: &'a DBInner, writable: bool) -> Result<Transaction<'a>> {
-		let file = if writable { Some(db.file.lock()?) } else { None };
+	pub(crate) fn new(db: &'a DBInner, writable: bool) -> Result<Transaction<'a>> {
+		let file = if writable {
+			Some(db.file.lock()?)
+		} else {
+			None
+		};
 		let tx = TransactionInner::new(db, writable)?;
 		let mut inner = Pin::new(Box::new(tx));
 		inner.init();
-		Ok(Transaction{
-			inner,
-			file,
-		})
+		Ok(Transaction { inner, file })
 	}
 
 	pub fn get_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<&mut Bucket> {
@@ -56,18 +57,17 @@ impl<'a> Transaction<'a> {
 	}
 }
 
-pub (crate) struct TransactionInner {
-	pub (crate) db: Ptr<DBInner>,
-	pub (crate) meta: Meta,
-	pub (crate) writable: bool,
-	pub (crate) freelist: Freelist,
+pub(crate) struct TransactionInner {
+	pub(crate) db: Ptr<DBInner>,
+	pub(crate) meta: Meta,
+	pub(crate) writable: bool,
+	pub(crate) freelist: Freelist,
 	data: Arc<Mmap>,
 	root: Option<Bucket>,
 	buffers: Vec<Vec<u8>>,
 }
 
 impl<'a> TransactionInner {
-
 	fn new(db: &DBInner, writable: bool) -> Result<TransactionInner> {
 		let mut meta: Meta = db.meta();
 		let mut freelist = db.freelist.clone();
@@ -88,7 +88,7 @@ impl<'a> TransactionInner {
 		let _lock = db.mmap_lock.lock()?;
 		let data = db.data.clone();
 
-		let tx = TransactionInner{
+		let tx = TransactionInner {
 			db: Ptr::new(db),
 			meta,
 			writable,
@@ -106,11 +106,11 @@ impl<'a> TransactionInner {
 	}
 
 	#[inline]
-	pub (crate) fn page(&self, id: usize) -> &Page {
+	pub(crate) fn page(&self, id: usize) -> &Page {
 		Page::from_buf(&self.data, id, self.db.pagesize)
 	}
 
-	pub (crate) fn get_bucket(&'a mut self, name: &[u8]) -> Result<&'a mut Bucket> {
+	pub(crate) fn get_bucket(&'a mut self, name: &[u8]) -> Result<&'a mut Bucket> {
 		debug_assert!(self.root.is_some());
 		if let Some(root) = self.root.as_mut() {
 			return root.get_bucket(name);
@@ -118,7 +118,7 @@ impl<'a> TransactionInner {
 		panic!("");
 	}
 
-	pub (crate) fn create_bucket(&'a mut self, name: &[u8]) -> Result<&'a mut Bucket> {
+	pub(crate) fn create_bucket(&'a mut self, name: &[u8]) -> Result<&'a mut Bucket> {
 		debug_assert!(self.root.is_some());
 		if let Some(root) = self.root.as_mut() {
 			return root.create_bucket(name);
@@ -126,19 +126,19 @@ impl<'a> TransactionInner {
 		panic!("");
 	}
 
-	pub (crate) fn copy_data(&mut self, data: &[u8]) -> SliceParts {
+	pub(crate) fn copy_data(&mut self, data: &[u8]) -> SliceParts {
 		let data = Vec::from(data);
 		self.buffers.push(data);
 		SliceParts::from_slice(&self.buffers.last().unwrap()[..])
 	}
 
-	pub (crate) fn free(&mut self, page_id: PageID, num_pages: usize) {
-		for id in page_id..(page_id+num_pages) {
+	pub(crate) fn free(&mut self, page_id: PageID, num_pages: usize) {
+		for id in page_id..(page_id + num_pages) {
 			self.freelist.free(self.meta.tx_id, id);
 		}
 	}
 
-	pub (crate) fn allocate(&mut self, bytes: usize) -> (PageID, usize) {
+	pub(crate) fn allocate(&mut self, bytes: usize) -> (PageID, usize) {
 		let num_pages = (bytes / self.db.pagesize) + 1;
 		let page_id = match self.freelist.allocate(num_pages) {
 			Some(page_id) => page_id,
@@ -153,7 +153,7 @@ impl<'a> TransactionInner {
 
 	fn rebalance(&mut self) -> Result<()> {
 		let root = self.root.as_mut().unwrap();
-		root.rebalance()?;		
+		root.rebalance()?;
 		Ok(())
 	}
 
@@ -183,8 +183,7 @@ impl<'a> TransactionInner {
 			let mut buf = vec![0; size];
 
 			#[allow(clippy::cast_ptr_alignment)]
-			let mut page = unsafe {&mut *(&mut buf[0] as *mut u8 as *mut Page)};
-						
+			let mut page = unsafe { &mut *(&mut buf[0] as *mut u8 as *mut Page) };
 			page.id = page_id;
 			page.overflow = num_pages - 1;
 			page.page_type = Page::TYPE_FREELIST;
@@ -201,14 +200,11 @@ impl<'a> TransactionInner {
 			let mut buf = vec![0; self.db.pagesize];
 
 			#[allow(clippy::cast_ptr_alignment)]
-			let mut page = unsafe {&mut *(&mut buf[0] as *mut u8 as *mut Page)};
-			
+			let mut page = unsafe { &mut *(&mut buf[0] as *mut u8 as *mut Page) };
 			let meta_page_id = if self.meta.meta_page == 0 { 1 } else { 0 };
-			
 			page.id = meta_page_id;
 			page.page_type = Page::TYPE_META;
 			let m = page.meta_mut();
-			
 			m.meta_page = meta_page_id as u8;
 			m.magic = self.meta.magic;
 			m.version = self.meta.version;
@@ -227,11 +223,10 @@ impl<'a> TransactionInner {
 		self.db.freelist = self.freelist.clone();
 		Ok(())
 	}
-
 }
 
 impl Drop for TransactionInner {
-    fn drop(&mut self) {
+	fn drop(&mut self) {
 		if !self.writable {
 			let mut open_txs = self.db.open_ro_txs.lock().unwrap();
 			let index = match open_txs.binary_search(&self.meta.tx_id) {
@@ -239,9 +234,9 @@ impl Drop for TransactionInner {
 				_ => {
 					debug_assert!(false, "dropped transaction id does not exist");
 					return;
-				},
+				}
 			};
 			open_txs.remove(index);
 		}
-    }
+	}
 }
