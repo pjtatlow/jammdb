@@ -1,3 +1,7 @@
+//! # Just Another Memory Mapped DataBase
+//!
+//!
+
 #![warn(clippy::all)]
 
 mod bucket;
@@ -13,6 +17,7 @@ mod ptr;
 mod transaction;
 
 pub use bucket::Bucket;
-pub use data::*;pub use db::{OpenOptions, DB};
+pub use data::*;
+pub use db::{OpenOptions, DB};
 pub use errors::*;
 pub use transaction::Transaction;
