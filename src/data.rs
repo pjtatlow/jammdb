@@ -57,6 +57,7 @@ impl Data {
 	}
 }
 
+///
 #[derive(Clone, Debug)]
 pub struct BucketData {
 	name: SliceParts,
@@ -93,11 +94,16 @@ impl BucketData {
 		}
 	}
 
-	pub fn size(&self) -> usize {
+	pub(crate) fn size(&self) -> usize {
 		self.name.size() + self.meta.size()
 	}
 }
 
+/// A Key and Value Pair
+///
+/// You can use the `key` and `value` methods to access the underlying byte slices.
+/// The data is only valid for the life of the transaction,
+/// so make a copy if you want to keep it around longer than that.
 #[derive(Clone, Debug)]
 pub struct KVPair {
 	key: SliceParts,
@@ -124,7 +130,7 @@ impl KVPair {
 		self.value.slice()
 	}
 
-	pub fn size(&self) -> usize {
+	pub(crate) fn size(&self) -> usize {
 		self.key.size() + self.value.size()
 	}
 }
@@ -253,17 +259,17 @@ mod tests {
 		let name = b"Hello Bucket!";
 		let mut meta = BucketMeta {
 			root_page: 3,
-			sequence: 24_985_738_796,
+			next_int: 24_985_738_796,
 		};
 
 		let b = BucketData::new(name, meta.as_ref());
 		assert_eq!(b.name(), name);
 		assert_eq!(b.meta().root_page, meta.root_page);
-		assert_eq!(b.meta().sequence, meta.sequence);
+		assert_eq!(b.meta().next_int, meta.next_int);
 		assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta));
 
-		meta.sequence += 1;
-		assert_eq!(b.meta().sequence, meta.sequence);
+		meta.next_int += 1;
+		assert_eq!(b.meta().next_int, meta.next_int);
 
 		let b = BucketData::from_slice_parts(
 			SliceParts::from_slice(name),
@@ -271,20 +277,20 @@ mod tests {
 		);
 		assert_eq!(b.name(), name);
 		assert_eq!(b.meta().root_page, meta.root_page);
-		assert_eq!(b.meta().sequence, meta.sequence);
+		assert_eq!(b.meta().next_int, meta.next_int);
 		assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta));
 
-		meta.sequence += 1;
-		assert_eq!(b.meta().sequence, meta.sequence);
+		meta.next_int += 1;
+		assert_eq!(b.meta().next_int, meta.next_int);
 
 		let b = BucketData::from_meta(SliceParts::from_slice(name), &meta);
 		assert_eq!(b.name(), name);
 		assert_eq!(b.meta().root_page, meta.root_page);
-		assert_eq!(b.meta().sequence, meta.sequence);
+		assert_eq!(b.meta().next_int, meta.next_int);
 		assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta));
 
-		meta.sequence += 1;
-		assert_eq!(b.meta().sequence, meta.sequence);
+		meta.next_int += 1;
+		assert_eq!(b.meta().next_int, meta.next_int);
 	}
 
 	#[test]
@@ -302,7 +308,7 @@ mod tests {
 
 		let meta = BucketMeta {
 			root_page: 456,
-			sequence: 8_888_888,
+			next_int: 8_888_888,
 		};
 		let data: Data = Data::Bucket(BucketData::new(&k, meta.as_ref()));
 

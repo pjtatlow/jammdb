@@ -1,4 +1,4 @@
-use jammdb::{DB, Error, Data, Bucket};
+use jammdb::{Bucket, Data, Error, DB};
 
 mod common;
 
@@ -14,6 +14,7 @@ fn sibling_buckets() -> Result<(), Error> {
 				b.put(i.to_be_bytes(), i.to_string())?;
 			}
 			check_data(&b, 11, 1, vec![]);
+			assert_eq!(b.next_int(), 11);
 			tx.commit()?;
 		}
 		{
@@ -25,22 +26,24 @@ fn sibling_buckets() -> Result<(), Error> {
 				b.put(i.to_be_bytes(), i.to_string().repeat(4))?;
 			}
 			check_data(&b, 11, 4, vec![]);
-			
+			assert_eq!(b.next_int(), 11);
 			let b2 = tx.create_bucket("def")?;
 			for i in 0..=900_u64 {
 				b2.put(i.to_be_bytes(), i.to_string().repeat(2))?;
 			}
 			check_data(&b2, 901, 2, vec![]);
-		
+			assert_eq!(b2.next_int(), 901);
 			tx.commit()?;
 		}
 		{
 			let mut tx = db.tx(true)?;
 			let b = tx.get_bucket("abc")?;
 			check_data(&b, 11, 4, vec![]);
+			assert_eq!(b.next_int(), 11);
 
 			let b2 = tx.get_bucket("def")?;
 			check_data(&b2, 901, 2, vec![]);
+			assert_eq!(b2.next_int(), 901);
 		}
 	}
 	{
@@ -69,17 +72,20 @@ fn nested_buckets() -> Result<(), Error> {
 			for i in 0..=10_u64 {
 				b.put(i.to_be_bytes(), i.to_string().repeat(2))?;
 			}
+			assert_eq!(b.next_int(), 11);
 			check_data(&b, 11, 2, vec![]);
 			let b = b.create_bucket("def")?;
-			for i in 0..=10_u64 {
+			for i in 0..=100_u64 {
 				b.put(i.to_be_bytes(), i.to_string().repeat(4))?;
 			}
-			check_data(&b, 11, 4, vec![]);
+			assert_eq!(b.next_int(), 101);
+			check_data(&b, 101, 4, vec![]);
 			let b = b.create_bucket("ghi")?;
-			for i in 0..=10_u64 {
+			for i in 0..=1000_u64 {
 				b.put(i.to_be_bytes(), i.to_string().repeat(8))?;
 			}
-			check_data(&b, 11, 8, vec![]);
+			assert_eq!(b.next_int(), 1001);
+			check_data(&b, 1001, 8, vec![]);
 			tx.commit()?;
 		}
 		{
@@ -87,12 +93,15 @@ fn nested_buckets() -> Result<(), Error> {
 
 			let b = tx.get_bucket("abc")?;
 			check_data(&b, 12, 2, vec![Vec::from("def".as_bytes())]);
+			assert_eq!(b.next_int(), 12);
 
 			let b = b.get_bucket("def")?;
-			check_data(&b, 12, 4, vec![Vec::from("ghi".as_bytes())]);
+			check_data(&b, 102, 4, vec![Vec::from("ghi".as_bytes())]);
+			assert_eq!(b.next_int(), 102);
 
 			let b = b.get_bucket("ghi")?;
-			check_data(&b, 11, 8, vec![]);
+			check_data(&b, 1001, 8, vec![]);
+			assert_eq!(b.next_int(), 1001);
 
 			tx.commit()?;
 		}
@@ -109,11 +118,11 @@ fn check_data(b: &Bucket, len: u64, repeats: usize, bucket_names: Vec<Vec<u8>>) 
 			Data::KeyValue(kv) => {
 				assert_eq!(kv.key(), i.to_be_bytes());
 				assert_eq!(kv.value(), i.to_string().repeat(repeats).as_bytes());
-			},
+			}
 			Data::Bucket(b) => {
 				assert!(bucket_names.contains(&Vec::from(b.name())));
-			},
-		};		
+			}
+		};
 	}
 	assert_eq!(count, len);
 }

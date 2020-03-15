@@ -201,7 +201,7 @@ fn init_file(path: &Path, pagesize: usize, num_pages: usize) -> Result<File> {
 		m.freelist_page = 2;
 		m.root = BucketMeta {
 			root_page: 3,
-			sequence: 0,
+			next_int: 0,
 		};
 		m.num_pages = 3;
 		m.hash = m.hash_self();

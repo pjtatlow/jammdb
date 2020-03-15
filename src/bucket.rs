@@ -113,6 +113,7 @@ impl Bucket {
 		if exists {
 			return Err(Error::BucketExists);
 		}
+		self.meta.next_int += 1;
 		let key = Vec::from(name);
 		self.new_child(&key);
 
@@ -127,6 +128,10 @@ impl Bucket {
 		node.insert_data(data);
 		let b = self.buckets.get_mut(&key).unwrap();
 		Ok(b)
+	}
+
+	pub fn next_int(&self) -> u64 {
+		self.meta.next_int
 	}
 
 	pub fn get<T: AsRef<[u8]>>(&self, key: T) -> Option<Data> {
@@ -153,7 +158,10 @@ impl Bucket {
 	fn put_data(&mut self, data: Data) {
 		self.dirty = true;
 		let mut c = self.cursor();
-		c.seek(data.key());
+		let exists = c.seek(data.key());
+		if !exists {
+			self.meta.next_int += 1;
+		}
 		let node = self.node(c.current_id());
 		node.insert_data(data);
 	}
@@ -253,7 +261,7 @@ const META_SIZE: usize = std::mem::size_of::<BucketMeta>();
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct BucketMeta {
 	pub(crate) root_page: PageID,
-	pub(crate) sequence: u64,
+	pub(crate) next_int: u64,
 }
 
 impl AsRef<[u8]> for BucketMeta {

@@ -1,4 +1,4 @@
-use jammdb::{DB, Error, Data, Bucket};
+use jammdb::{Bucket, Data, Error, DB};
 use rand::prelude::*;
 
 mod common;
@@ -42,6 +42,7 @@ fn test_insert(mut values: Vec<u64>) -> Result<(), Error> {
 			}
 			// check before commit
 			check_data(&b, values.len() as u64, 1);
+			assert_eq!(b.next_int(), values.len() as u64);
 			tx.commit()?;
 		}
 		{
@@ -49,6 +50,7 @@ fn test_insert(mut values: Vec<u64>) -> Result<(), Error> {
 			let b = tx.get_bucket("abc")?;
 			// check after commit before closing file
 			check_data(&b, values.len() as u64, 1);
+			assert_eq!(b.next_int(), values.len() as u64);
 		}
 	}
 	{
@@ -57,6 +59,7 @@ fn test_insert(mut values: Vec<u64>) -> Result<(), Error> {
 		let b = tx.get_bucket("abc")?;
 		// check after re-opening file
 		check_data(&b, values.len() as u64, 1);
+		assert_eq!(b.next_int(), values.len() as u64);
 		let missing_key = (values.len() + 1) as u64;
 		assert!(b.get(missing_key.to_be_bytes()).is_none());
 	}
@@ -72,10 +75,9 @@ fn check_data(b: &Bucket, len: u64, repeats: usize) {
 			Data::KeyValue(kv) => {
 				assert_eq!(kv.key(), i.to_be_bytes());
 				assert_eq!(kv.value(), i.to_string().repeat(repeats).as_bytes());
-			},
+			}
 			_ => panic!("Expected Data::KeyValue"),
-		};		
+		};
 	}
 	assert_eq!(count, len);
 }
-

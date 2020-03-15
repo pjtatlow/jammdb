@@ -54,7 +54,7 @@ mod tests {
 			pagesize: 4096,
 			root: BucketMeta {
 				root_page: 2,
-				sequence: 2020,
+				next_int: 2020,
 			},
 			num_pages: 13,
 			freelist_page: 3,
