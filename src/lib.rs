@@ -1,8 +1,9 @@
-//! # Just Another Memory Mapped DataBase
+//! # Just Another Memory Mapped Database
 //!
 //!
 
 #![warn(clippy::all)]
+#![warn(missing_docs)]
 
 mod bucket;
 mod cursor;
@@ -17,6 +18,7 @@ mod ptr;
 mod transaction;
 
 pub use bucket::Bucket;
+pub use cursor::Cursor;
 pub use data::*;
 pub use db::{OpenOptions, DB};
 pub use errors::*;

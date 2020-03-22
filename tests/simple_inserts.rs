@@ -21,9 +21,9 @@ fn medium_insert() -> Result<(), Error> {
 
 #[test]
 fn large_insert() -> Result<(), Error> {
-	test_insert((0..=100000).collect())?;
-	test_insert((0..=100000).collect())?;
-	test_insert((0..=100000).collect())?;
+	test_insert((0..=50000).collect())?;
+	test_insert((0..=50000).collect())?;
+	test_insert((0..=50000).collect())?;
 	Ok(())
 }
 

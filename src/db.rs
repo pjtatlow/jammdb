@@ -23,6 +23,27 @@ pub(crate) const MIN_ALLOC_SIZE: u64 = 8 * 1024 * 1024;
 // Number of pages to allocate when creating the database
 const DEFAULT_NUM_PAGES: usize = 32;
 
+/// Options to configure how a [`DB`] is opened.
+///
+/// This struct acts as a builder for a [`DB`] and allows you to specify
+/// the initial pagesize and number of pages you want to allocate for a new database file.
+///
+/// # Examples
+///
+/// ```no_run
+/// use jammdb::{DB};
+/// # use jammdb::Error;
+///
+/// # fn main() -> Result<(), Error> {
+/// let mut db = OpenOptions::new()
+///     .pagesize(4096)
+///     .num_pages(32)
+///     .open("my.db")?;
+///
+/// // do whatever you want with the DB
+/// # Ok(())
+/// # }
+/// ```
 pub struct OpenOptions {
 	pagesize: usize,
 	num_pages: usize,
@@ -31,6 +52,9 @@ pub struct OpenOptions {
 impl Default for OpenOptions {
 	fn default() -> Self {
 		let pagesize = getPageSize();
+		if pagesize < 1024 {
+			panic!("Pagesize must be 1024 bytes minimum");
+		}
 		OpenOptions {
 			pagesize,
 			num_pages: DEFAULT_NUM_PAGES,
@@ -39,23 +63,57 @@ impl Default for OpenOptions {
 }
 
 impl OpenOptions {
+	/// Returns a new OpenOptions, with the default values.
 	pub fn new() -> Self {
 		Self::default()
 	}
 
+	/// Sets the pagesize for the database
+	///
+	/// By default, your OS's pagesize is used as the database's pagesize, but if the file is
+	/// moved across systems with different page sizes, it is necessary to set the correct value.
+	/// Trying to open an existing database with the incorrect page size will result in a panic.
+	///
+	/// # Panics
+	/// Will panic if you try to set the pagesize < 1024 bytes.
 	pub fn pagesize(mut self, pagesize: usize) -> Self {
+		if pagesize < 1024 {
+			panic!("Pagesize must be 1024 bytes minimum");
+		}
 		self.pagesize = pagesize;
 		self
 	}
 
+	/// Sets the number of pages to allocate for a new database file.
+	///
+	/// The default `num_pages` is set to 32, so if your pagesize is 4096 bytes (4kb), then 131,072 bytes (128kb) will be allocated for the initial file.
+	/// Setting `num_pages` when opening an existing database has no effect.
+	///
+	/// # Panics
+	/// Since a minimum of four pages are required for the database, this function will panic if you provide a value < 4.
 	pub fn num_pages(mut self, num_pages: usize) -> Self {
 		if num_pages < 4 {
-			panic!("Must have 4 or more pages minimum");
+			panic!("Must have a minimum of 4 pages");
 		}
 		self.num_pages = num_pages;
 		self
 	}
 
+	/// Opens the database with the current options.
+	///
+	/// If the file does not exist, it will initialize an empty database with a size of (`num_pages * pagesize`) bytes.
+	/// If it does exist, the file is opened with both read and write permissions, and we attempt to create an
+	/// [exclusive lock](https://en.wikipedia.org/wiki/File_locking) on the file. Getting the file lock will block until the lock
+	/// is released to prevent you from having two processes modifying the file at the same time. This lock is not foolproof though,
+	/// so it is up to the user to make sure only one process has access to the database at a time (unless it is read-only).
+	///
+	/// # Errors
+	///
+	/// Will return an error if there are issues creating a new file, opening an existing file, obtaining the file lock, or creating the memory map.
+	///
+	/// # Panics
+	///
+	/// Will panic if the pagesize the database is opened with is not the same as the pagesize it was created with.
 	pub fn open<P: AsRef<Path>>(self, path: P) -> Result<DB> {
 		let path: &Path = path.as_ref();
 		let file = if !path.exists() {
@@ -69,18 +127,46 @@ impl OpenOptions {
 	}
 }
 
+/// A database
+///
+/// A DB can created from an [`OpenOptions`] builder, or by calling [`open`](#method.open).
+/// From a DB, you can create a [`Transaction`] to access the data in the database.
+/// Opening a transaction requires a mutable borrow though, so you need to `clone` the database
+/// to have concurrent transactions (you're really just cloning an [`Arc`] so it's pretty cheap).
 #[derive(Clone)]
 pub struct DB(Arc<DBInner>);
 
 impl DB {
+	/// Opens a database using the default [`OpenOptions`].
+	///
+	/// Same as calling `OpenOptions::new().open(path)`.
+	/// Please read the documentation for [`OpenOptions::open`](struct.OpenOptions.html#method.open) for details.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// use jammdb::{DB};
+	/// # use jammdb::Error;
+	///
+	/// # fn main() -> Result<(), Error> {
+	/// let mut db = DB::open("my.db")?;
+	///
+	/// // do whatever you want with the DB
+	/// # Ok(())
+	/// # }
+	/// ```
 	pub fn open<P: AsRef<Path>>(path: P) -> Result<DB> {
 		OpenOptions::new().open(path)
 	}
 
+	/// Creates a [`Transaction`].
+	/// This transaction is either read-only or writable depending on the `writable` parameter.
+	/// Please read the docs on a [`Transaction`] for more details.
 	pub fn tx(&mut self, writable: bool) -> Result<Transaction> {
 		Transaction::new(&self.0, writable)
 	}
 
+	/// Returns the database's pagesize.
 	pub fn pagesize(&self) -> usize {
 		self.0.pagesize
 	}

@@ -9,3 +9,8 @@ coverage:
 	genhtml -o ./target/debug/coverage/ --show-details --highlight --ignore-errors source --legend ./target/debug/lcov.info && \
 	open ./target/debug/coverage/index.html && \
 	find ./target \( -name "jammdb*" \) -print | xargs rm -rf
+
+docs:
+	cargo +nightly doc
+docs-open:
+	cargo +nightly doc --open

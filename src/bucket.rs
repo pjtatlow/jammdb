@@ -10,13 +10,59 @@ use crate::page::{Page, PageID};
 use crate::ptr::Ptr;
 use crate::transaction::TransactionInner;
 
+/// A collection of data
+///
+/// Buckets contain a collection of data, sorted by key.
+/// The data can either be key / value pairs, or nested buckets.
+/// You can use buckets to [`get`](#method.get) and [`put`](#method.put) data,
+/// as well as [`get`](#method.get_bucket) and [`create`](#method.create_bucket)
+/// nested buckets.
+///
+/// You can use a [`Cursor`] to iterate over
+/// all the data in a bucket.
+///
+/// Buckets have an inner auto-incremented counter that keeps track
+/// of how many unique keys have been inserted into the bucket.
+/// You can access that using the [`next_int()`](#method.next_int) function.
+///
+/// # Examples
+///
+/// ```no_run
+/// use jammdb::{DB, Data};
+/// # use jammdb::Error;
+///
+/// # fn main() -> Result<(), Error> {
+/// let mut db = DB::open("my.db")?;
+/// let mut tx = db.tx(true)?;
+///
+/// // create a root-level bucket
+/// let bucket = tx.create_bucket("my-bucket")?;
+///
+/// // create nested bucket
+/// bucket.create_bucket("nested-bucket")?;
+///
+/// // insert a key / value pair (using &str)
+/// bucket.put("key", "value");
+///
+/// // insert a key / value pair (using [u8])
+/// bucket.put([1,2,3], [4,5,6]);
+///
+/// for data in bucket.cursor() {
+///     match data {
+///         Data::Bucket(b) => println!("found a bucket with the name {:?}", b.name()),
+///         Data::KeyValue(kv) => println!("found a kv pair {:?} {:?}", kv.key(), kv.value()),
+///     }
+/// }
+///
+/// println!("Bucket next_int {:?}", bucket.next_int());
+/// # Ok(())
+/// # }
+/// ```
 pub struct Bucket {
 	pub(crate) tx: Ptr<TransactionInner>,
 	pub(crate) meta: BucketMeta,
 	pub(crate) root: PageNodeID,
 	dirty: bool,
-	// page: Option<Ptr<Page>>,
-	// node: Option<NodeID>,
 	buckets: HashMap<Vec<u8>, Pin<Box<Bucket>>>,
 	nodes: Vec<Pin<Box<Node>>>,
 	page_node_ids: HashMap<PageID, NodeID>,
@@ -77,6 +123,34 @@ impl Bucket {
 		}
 	}
 
+	/// Gets an already created bucket.
+	///
+	/// Returns an error if
+	/// 1. the given key does not exist, or
+	/// 2. the key is for key / value data, not a bucket.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// use jammdb::{DB};
+	/// # use jammdb::Error;
+	///
+	/// # fn main() -> Result<(), Error> {
+	/// let mut db = DB::open("my.db")?;
+	/// let mut tx = db.tx(false)?;
+	///
+	/// // get a root-level bucket
+	/// let bucket = tx.get_bucket("my-bucket")?;
+	///
+	/// // get nested bucket
+	/// let sub_bucket = bucket.get_bucket("nested-bucket")?;
+	///
+	/// // get nested bucket
+	/// let sub_sub_bucket = sub_bucket.get_bucket("double-nested-bucket")?;
+	///
+	/// # Ok(())
+	/// # }
+	/// ```
 	pub fn get_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<&mut Bucket> {
 		let name = name.as_ref();
 		let key = Vec::from(name);
@@ -102,6 +176,32 @@ impl Bucket {
 		Ok(self.buckets.get_mut(&key).unwrap())
 	}
 
+	/// Creates a new bucket.
+	///
+	/// Returns an error if the given key already exists.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// use jammdb::{DB};
+	/// # use jammdb::Error;
+	///
+	/// # fn main() -> Result<(), Error> {
+	/// let mut db = DB::open("my.db")?;
+	/// let mut tx = db.tx(true)?;
+	///
+	/// // create a root-level bucket
+	/// let bucket = tx.create_bucket("my-bucket")?;
+	///
+	/// // create nested bucket
+	/// let sub_bucket = bucket.create_bucket("nested-bucket")?;
+	///
+	/// // create nested bucket
+	/// let sub_sub_bucket = sub_bucket.create_bucket("double-nested-bucket")?;
+	///
+	/// # Ok(())
+	/// # }
+	/// ```
 	pub fn create_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<&mut Bucket> {
 		if !self.tx.writable {
 			return Err(Error::ReadOnlyTx);
@@ -111,6 +211,9 @@ impl Bucket {
 		let name = name.as_ref();
 		let exists = c.seek(name);
 		if exists {
+			if c.current().unwrap().is_kv() {
+				return Err(Error::IncompatibleValue);
+			}
 			return Err(Error::BucketExists);
 		}
 		self.meta.next_int += 1;
@@ -130,10 +233,72 @@ impl Bucket {
 		Ok(b)
 	}
 
+	/// Returns the next integer for the bucket.
+	/// The integer is automatically incremented each time a new key is added to the bucket.
+	/// You can it as a unique key for the bucket, since it will increment each time you add something new.
+	/// It will not increment if you [`put`](#method.put) a key that already exists
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// use jammdb::{DB};
+	/// # use jammdb::Error;
+	///
+	/// # fn main() -> Result<(), Error> {
+	/// let mut db = DB::open("my.db")?;
+	/// let mut tx = db.tx(true)?;
+	///
+	/// // create a root-level bucket
+	/// let bucket = tx.create_bucket("my-bucket")?;
+	/// // starts at 0
+	/// assert_eq!(bucket.next_int(), 0);
+	///
+	/// bucket.put(bucket.next_int().to_be_bytes(), [0]);
+	/// // auto-incremented after inserting a key / value pair
+	/// assert_eq!(bucket.next_int(), 1);
+	///
+	/// bucket.put(0_u64.to_be_bytes(), [0, 0]);
+	/// // not incremented after updating a key / value pair
+	/// assert_eq!(bucket.next_int(), 1);
+	///
+	/// bucket.create_bucket("nested-bucket")?;
+	/// // auto-incremented after creating a nested bucket
+	/// assert_eq!(bucket.next_int(), 2);
+	///
+	/// # Ok(())
+	/// # }
+	/// ```
 	pub fn next_int(&self) -> u64 {
 		self.meta.next_int
 	}
 
+	/// Gets data from a bucket.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// use jammdb::{DB, Data};
+	/// # use jammdb::Error;
+	///
+	/// # fn main() -> Result<(), Error> {
+	/// let mut db = DB::open("my.db")?;
+	/// let mut tx = db.tx(false)?;
+	///
+	/// let bucket = tx.get_bucket("my-bucket")?;
+	///
+	/// match bucket.get("some-key") {
+	///     Some(data) => {
+	///         match data {
+	///             Data::Bucket(b) => println!("found a bucket with the name {:?}", b.name()),
+	///             Data::KeyValue(kv) => println!("found a kv pair {:?} {:?}", kv.key(), kv.value()),
+	///         }
+	///     },
+	///     None => println!("Key does not exist"),
+	/// }
+	///
+	/// # Ok(())
+	/// # }
+	/// ```
 	pub fn get<T: AsRef<[u8]>>(&self, key: T) -> Option<Data> {
 		let mut c = self.cursor();
 		let exists = c.seek(key);
@@ -144,28 +309,87 @@ impl Bucket {
 		}
 	}
 
-	// Returns an Error only if the current transaction is read-only.
+	/// Adds to or replaces key / value data in the bucket.
+	/// Returns an error if the key currently exists but is a bucket instead of a key / value pair.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// use jammdb::{DB};
+	/// # use jammdb::Error;
+	///
+	/// # fn main() -> Result<(), Error> {
+	/// let mut db = DB::open("my.db")?;
+	/// let mut tx = db.tx(true)?;
+	///
+	/// // create a root-level bucket
+	/// let bucket = tx.create_bucket("my-bucket")?;
+	///
+	/// // insert data
+	/// bucket.put("123", "456")?;
+	///
+	/// // update data
+	/// bucket.put("123", "789")?;
+	///
+	/// bucket.create_bucket("nested-bucket")?;
+	///
+	/// assert!(bucket.put("nested-bucket", "data").is_err());
+	///
+	/// # Ok(())
+	/// # }
+	/// ```
 	pub fn put<T: AsRef<[u8]>, S: AsRef<[u8]>>(&mut self, key: T, value: S) -> Result<()> {
 		if !self.tx.writable {
 			return Err(Error::ReadOnlyTx);
 		}
 		let k = self.tx.copy_data(key.as_ref());
 		let v = self.tx.copy_data(value.as_ref());
-		self.put_data(Data::KeyValue(KVPair::from_slice_parts(k, v)));
+		self.put_data(Data::KeyValue(KVPair::from_slice_parts(k, v)))?;
 		Ok(())
 	}
 
-	fn put_data(&mut self, data: Data) {
+	fn put_data(&mut self, data: Data) -> Result<()> {
 		self.dirty = true;
 		let mut c = self.cursor();
 		let exists = c.seek(data.key());
-		if !exists {
+		if exists {
+			let current = c.current().unwrap();
+			if current.is_kv() != data.is_kv() {
+				return Err(Error::IncompatibleValue);
+			}
+		} else {
 			self.meta.next_int += 1;
 		}
 		let node = self.node(c.current_id());
 		node.insert_data(data);
+		Ok(())
 	}
 
+	/// Get a cursor to iterate over the bucket.
+	///
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// use jammdb::{DB, Data};
+	/// # use jammdb::Error;
+	///
+	/// # fn main() -> Result<(), Error> {
+	/// let mut db = DB::open("my.db")?;
+	/// let mut tx = db.tx(false)?;
+	///
+	/// let bucket = tx.get_bucket("my-bucket")?;
+	///
+	/// for data in bucket.cursor() {
+	///     match data {
+	///         Data::Bucket(b) => println!("found a bucket with the name {:?}", b.name()),
+	///         Data::KeyValue(kv) => println!("found a kv pair {:?} {:?}", kv.key(), kv.value()),
+	///     }
+	/// }
+	///
+	/// # Ok(())
+	/// # }
+	/// ```
 	pub fn cursor(&self) -> Cursor {
 		Cursor::new(Ptr::new(self))
 	}
@@ -220,7 +444,7 @@ impl Bucket {
 		for (k, b) in bucket_metas {
 			let name = self.tx.copy_data(&k[..]);
 			let meta = self.tx.copy_data(b.as_ref());
-			self.put_data(Data::Bucket(BucketData::from_slice_parts(name, meta)));
+			self.put_data(Data::Bucket(BucketData::from_slice_parts(name, meta)))?;
 		}
 		let mut root_id = self.root;
 		if self.dirty {
@@ -249,6 +473,7 @@ impl Bucket {
 		Ok(())
 	}
 
+	#[doc(hidden)]
 	pub fn print(&self) {
 		let page = self.tx.page(self.meta.root_page);
 		page.print(&self.tx);

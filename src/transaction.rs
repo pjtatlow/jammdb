@@ -16,6 +16,68 @@ use crate::meta::Meta;
 use crate::page::{Page, PageID};
 use crate::ptr::Ptr;
 
+/// An isolated view of the database
+///
+/// Transactions are how you can interact with the database.
+/// They are created from a [`DB`](struct.DB.html),
+/// and can be read-only or writable<sup>1</sup> depending on the paramater you pass into the [`tx`](struct.DB.html#method.tx) method.
+/// Transactions are completely isolated from each other, so a read-only transaction can expect the data to stay exactly the same for the life
+/// of the transaction, regardless of how many changes are made in other transactions<sup>2</sup>.
+///
+/// There are three important methods. Check out their documentation for more details:
+/// 1. [`create_bucket`](#method.create_bucket) makes new buckets at the root level. Available in writable transactions.
+/// 2. [`get_bucket`](#method.get_bucket) retreives buckets from the root level. Available in read-only or writable transactions.
+/// 3. [`commit`](#method.commit) saves a writable transaction. Available in writable transactions.
+///
+/// Trying to use the methods that require writable transactions from a read-only transaction will result in an error.
+///
+/// # Examples
+///
+/// ```no_run
+/// use jammdb::{DB, Data};
+/// # use jammdb::Error;
+///
+/// # fn main() -> Result<(), Error> {
+/// # let mut db = DB::open("my.db")?;
+/// # // note that only one tx can be opened from each copy of the DB, so we clone it here for the example
+/// # let mut db2 = db.clone();
+/// // create a read-only transaction
+/// let mut tx1 = db.tx(false)?;
+///
+/// # // hide the clone for this example
+/// # let mut db = db2;
+/// // create a writable transcation
+/// let mut tx2 = db.tx(true)?;
+///
+/// // create a new bucket in the writable transaction
+/// tx2.create_bucket("new-bucket")?;
+///
+/// // the read-only transaction will not be able to see the new bucket
+/// assert!(tx1.get_bucket("new-bucket").is_err());
+///
+/// // get a view of an existing bucket from both transactions
+/// let mut b1 = tx1.get_bucket("existing-bucket")?;
+/// let mut b2 = tx2.get_bucket("existing-bucket")?;
+///
+/// // make an edit to the bucket
+/// b2.put("new-key", "new-value")?;
+///
+/// // the read-only transaction will not have this new key
+/// assert_eq!(b1.get("new-key"), None);
+/// // but it will be able to see data that already existed!
+/// assert!(b1.get("existing-key").is_some());
+///
+/// # Ok(())
+/// # }
+/// ```
+///
+///
+/// <sup>1</sup> There can only be a single writeable transaction at a time, so trying to open
+/// two writable transactions on the same thread will deadlock.
+///
+/// <sup>2</sup> Keep in mind that long running read-only transactions will prevent the database from
+/// reclaiming old pages and your database may increase in disk size quickly if you're writing lots of data,
+/// so it's a good idea to keep transactions short.
 pub struct Transaction<'a> {
 	inner: Pin<Box<TransactionInner>>,
 	file: Option<MutexGuard<'a, File>>,
@@ -34,14 +96,35 @@ impl<'a> Transaction<'a> {
 		Ok(Transaction { inner, file })
 	}
 
+	/// Returns a reference to the root level bucket with the given name.
+	///
+	/// # Errors
+	///
+	/// Will return a [`BucketMissing`](enum.Error.html#variant.BucketMissing) error if the bucket does not exist,
+	/// or an [`IncompatibleValue`](enum.Error.html#variant.IncompatibleValue) error if the key exists but is not a bucket.
+	///
+	/// In a read-only transaction, you will get an error when trying to use any of the bucket's methods that modify data.
 	pub fn get_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<&mut Bucket> {
 		self.inner.get_bucket(name.as_ref())
 	}
 
+	/// Creates a new bucket with the given name and returns a reference it.
+	///
+	/// # Errors
+	///
+	/// Will return a [`BucketExists`](enum.Error.html#variant.BucketExists) error if the bucket already exists,
+	/// an [`IncompatibleValue`](enum.Error.html#variant.IncompatibleValue) error if the key exists but is not a bucket,
+	/// or a [`ReadOnlyTx`](enum.Error.html#variant.ReadOnlyTx) error if this is called on a read-only transaction.
 	pub fn create_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<&mut Bucket> {
 		self.inner.create_bucket(name.as_ref())
 	}
 
+	/// Writes the changes made in the writeable transaction to the underlying file.
+	///
+	/// # Errors
+	///
+	/// Will return an [`IOError`](enum.Error.html#variant.IOError) error if there are any io errors while writing to disk,
+	/// or a [`ReadOnlyTx`](enum.Error.html#variant.ReadOnlyTx) error if this is called on a read-only transaction.
 	pub fn commit(mut self) -> Result<()> {
 		if !self.inner.writable {
 			return Err(Error::ReadOnlyTx);
@@ -50,6 +133,7 @@ impl<'a> Transaction<'a> {
 		self.inner.write_data(&mut self.file.as_mut().unwrap())
 	}
 
+	#[doc(hidden)]
 	pub fn print_graph(&self) {
 		println!("digraph G {{");
 		self.inner.root.as_ref().unwrap().print();

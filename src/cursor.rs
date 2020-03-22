@@ -91,9 +91,51 @@ impl PageNode {
 	}
 }
 
+/// An iterator over a bucket
+///
+/// A cursor is created by using the [`cursor`](struct.Bucket.html#method.cursor)
+/// function on a [`Bucket`]. It's primary purpose is to be an [`Iterator`] over
+/// the bucket's [`Data`]. By default, a newly created cursor will start at the first
+/// element in the bucket (sorted by key), but you can use the [`seek`](#method.seek) method to
+/// move the cursor to a certain key / prefix before beginning to iterate.
+///
+/// Note that if the key you seek to exists, the cursor will begin to iterate after
+/// the
+///
+/// # Examples
+///
+/// ```no_run
+/// use jammdb::{DB, Data};
+/// # use jammdb::Error;
+///
+/// # fn main() -> Result<(), Error> {
+/// let mut db = DB::open("my.db")?;
+/// let mut tx = db.tx(false)?;
+/// let bucket = tx.get_bucket("my-bucket")?;
+///
+/// // create a cursor and use it to iterate over the entire bucket
+/// for data in bucket.cursor() {
+///     match data {
+///         Data::Bucket(b) => println!("found a bucket with the name {:?}", b.name()),
+///         Data::KeyValue(kv) => println!("found a kv pair {:?} {:?}", kv.key(), kv.value()),
+///     }
+/// }
+///
+/// let mut cursor = bucket.cursor();
+/// // seek to the key "f"
+/// // if it doesn't exist, it will start at the position wh
+/// cursor.seek("f");
+/// //
+/// for data in cursor {
+/// }
+///
+/// # Ok(())
+/// # }
+/// ```
 pub struct Cursor {
 	bucket: Ptr<Bucket>,
 	stack: Vec<Elem>,
+	next_called: bool,
 }
 
 impl Cursor {
@@ -101,6 +143,7 @@ impl Cursor {
 		Cursor {
 			bucket: b,
 			stack: vec![],
+			next_called: false,
 		}
 	}
 
@@ -112,21 +155,19 @@ impl Cursor {
 		}
 	}
 
-	pub fn get<T: AsRef<[u8]>>(&mut self, key: T) -> Option<Data> {
-		let exists = self.seek(key);
-		if exists {
-			self.current()
-		} else {
-			None
-		}
-	}
-
-	// moves the cursor to a given point
+	/// Moves the cursor to the given key.
+	/// If the key does not exist, the cursor stops "just before"
+	/// where the key _would_ be.
+	///
+	/// Returns whether or not the key exists in the bucket.
 	pub fn seek<T: AsRef<[u8]>>(&mut self, key: T) -> bool {
+		self.next_called = false;
 		self.stack.clear();
 		self.search(key.as_ref(), self.bucket.meta.root_page)
 	}
 
+	/// Returns the data at the cursor's current position.
+	/// You can use this to get data after doing a [`seek`](#method.seek).
 	pub fn current(&self) -> Option<Data> {
 		match self.stack.last() {
 			Some(e) => e.page_node.val(e.index),
@@ -153,7 +194,7 @@ impl Cursor {
 		self.search(key, next_page_id)
 	}
 
-	pub fn seek_first(&mut self) {
+	pub(crate) fn seek_first(&mut self) {
 		if self.stack.is_empty() {
 			let page_node = self.bucket.page_node(self.bucket.meta.root_page);
 			self.stack.push(Elem {
@@ -184,7 +225,7 @@ impl Iterator for Cursor {
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.stack.is_empty() {
 			self.seek_first();
-		} else {
+		} else if self.next_called {
 			loop {
 				let elem = self.stack.last_mut().unwrap();
 				if elem.index >= (elem.page_node.len() - 1) {
@@ -200,6 +241,7 @@ impl Iterator for Cursor {
 				break;
 			}
 		}
+		self.next_called = true;
 		self.current()
 	}
 }

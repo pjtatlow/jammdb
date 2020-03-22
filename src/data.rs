@@ -6,9 +6,36 @@ use crate::bucket::BucketMeta;
 use crate::node::{Node, NodeType};
 use crate::page::LeafElement;
 
-#[derive(Clone, Debug)]
+/// Key / Value or Bucket Data
+///
+/// The two enum variants represent either a key / value pair or a nested bucket.
+/// If you want to access the underneath data, you must match the variant first.
+///
+/// # Examples
+///
+/// ```no_run
+/// use jammdb::{DB, Data};
+/// # use jammdb::Error;
+///
+/// # fn main() -> Result<(), Error> {
+/// let mut db = DB::open("my.db")?;
+/// let mut tx = db.tx(true)?;
+/// let bucket = tx.create_bucket("my-bucket")?;
+///
+/// if let Some(data) = bucket.get("my-key") {
+///     match data {
+///         Data::Bucket(b) => assert_eq!(b.name(), b"my-key"),
+///         Data::KeyValue(kv) => assert_eq!(kv.key(), b"my-key"),
+///     }
+/// }
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Clone, Debug, PartialEq)]
 pub enum Data {
+	/// Contains data about a nested bucket
 	Bucket(BucketData),
+	/// a key / value pair of bytes
 	KeyValue(KVPair),
 }
 
@@ -55,10 +82,44 @@ impl Data {
 			Data::KeyValue(kv) => kv.size(),
 		}
 	}
+
+	pub(crate) fn is_kv(&self) -> bool {
+		match self {
+			Data::KeyValue(_) => true,
+			_ => false,
+		}
+	}
 }
 
+/// Nested bucket placeholder
 ///
-#[derive(Clone, Debug)]
+/// This data type signifies that a given key is associated with a nested bucket.alloc
+/// You can access the key using the `name` function.
+/// The bucket's name can be used to retreive the bucket using the `get_bucket` function.
+///
+/// # Examples
+///
+/// ```no_run
+/// use jammdb::{DB, Data};
+/// # use jammdb::Error;
+///
+/// # fn main() -> Result<(), Error> {
+/// let mut db = DB::open("my.db")?;
+/// let mut tx = db.tx(true)?;
+/// let bucket = tx.create_bucket("my-bucket")?;
+///
+/// bucket.create_bucket("my-nested-bucket")?;
+/// if let Some(data) = bucket.get("my-nested-bucket") {
+///     if let Data::Bucket(b) = data {
+///         let name: &[u8] = b.name();
+///         assert_eq!(name, b"my-nested-bucket");
+///         let nested_bucket = bucket.get_bucket(b.name()).unwrap();
+///     }
+/// }
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Clone, Debug, PartialEq)]
 pub struct BucketData {
 	name: SliceParts,
 	meta: SliceParts,
@@ -83,6 +144,7 @@ impl BucketData {
 		}
 	}
 
+	/// Returns the name of the bucket as a byte slice.
 	pub fn name(&self) -> &[u8] {
 		self.name.slice()
 	}
@@ -99,12 +161,37 @@ impl BucketData {
 	}
 }
 
-/// A Key and Value Pair
+/// Key / Value Pair
 ///
-/// You can use the `key` and `value` methods to access the underlying byte slices.
+/// You can use the [`key`](#method.key) and [`value`](#method.value) methods to access the underlying byte slices.
 /// The data is only valid for the life of the transaction,
 /// so make a copy if you want to keep it around longer than that.
-#[derive(Clone, Debug)]
+///
+/// # Examples
+///
+/// ```no_run
+/// use jammdb::{DB, Data};
+/// # use jammdb::Error;
+///
+/// # fn main() -> Result<(), Error> {
+/// let mut db = DB::open("my.db")?;
+/// let mut tx = db.tx(false)?;
+/// let bucket = tx.get_bucket("my-bucket")?;
+///
+/// // put a key / value pair into the bucket
+/// bucket.put("my-key", "my-value")?;
+/// if let Some(data) = bucket.get("my-key") {
+///     if let Data::KeyValue(kv) = data {
+///         let key: &[u8] = kv.key();
+///         let value: &[u8] = kv.value();
+///         assert_eq!(key, b"my-key");
+///         assert_eq!(value, b"my-value");
+///     }
+/// }
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Clone, Debug, PartialEq)]
 pub struct KVPair {
 	key: SliceParts,
 	value: SliceParts,
@@ -122,16 +209,18 @@ impl KVPair {
 		KVPair { key, value }
 	}
 
+	pub(crate) fn size(&self) -> usize {
+		self.key.size() + self.value.size()
+	}
+
+	/// Returns the key of the key / value pair as a byte slice.
 	pub fn key(&self) -> &[u8] {
 		self.key.slice()
 	}
 
+	/// Returns the value of the key / value pair as a byte slice.
 	pub fn value(&self) -> &[u8] {
 		self.value.slice()
-	}
-
-	pub(crate) fn size(&self) -> usize {
-		self.key.size() + self.value.size()
 	}
 }
 
