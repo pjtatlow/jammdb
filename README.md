@@ -19,3 +19,5 @@ with multiple lock-free readers and a single concurrent writer. The data is orga
 so random and sequential reads are very fast. The underlying file is memory mapped, so reads require no additional memory allocation.
 
 This project is still in the very early stages, but detailed examples are coming soon!
+
+License: MIT

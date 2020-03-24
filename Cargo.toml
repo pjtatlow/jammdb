@@ -1,8 +1,14 @@
 [package]
 name = "jammdb"
+description = "An embedded single-file database for Rust"
 version = "0.1.0"
 authors = ["PJ Tatlow <pjtatlow@gmail.com>"]
 edition = "2018"
+license = "MIT"
+repo = "https://github.com/pjtatlow/jammdb"
+readme = "README.md"
+keywords = ["db", "database", "embedded-database", "memory map"]
+categories = ["database ", "database-implementations"]
 
 [dependencies]
 memmap = "0.7.0"
@@ -14,6 +20,5 @@ sha3 = "0.8"
 rand = "0.7"
 
 [badges]
-
 codecov = { repository = "pjtatlow/jammdb", branch = "master", service = "github" }
 maintenance = { status = "experimental" }
