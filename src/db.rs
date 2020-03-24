@@ -31,7 +31,7 @@ const DEFAULT_NUM_PAGES: usize = 32;
 /// # Examples
 ///
 /// ```no_run
-/// use jammdb::{DB};
+/// use jammdb::{DB, OpenOptions};
 /// # use jammdb::Error;
 ///
 /// # fn main() -> Result<(), Error> {
@@ -330,28 +330,28 @@ mod tests {
 
 	#[test]
 	fn test_open_options() {
-		assert_ne!(getPageSize(), 500);
+		assert_ne!(getPageSize(), 5000);
 		let path = random_file();
 		{
 			let db = OpenOptions::new()
-				.pagesize(500)
+				.pagesize(5000)
 				.num_pages(100)
 				.open(path.clone())
 				.unwrap();
-			assert_eq!(db.pagesize(), 500);
+			assert_eq!(db.pagesize(), 5000);
 		}
 		{
 			let metadata = path.metadata().unwrap();
 			assert!(metadata.is_file());
-			assert_eq!(metadata.len(), 50000);
+			assert_eq!(metadata.len(), 500000);
 		}
 		{
 			let db = OpenOptions::new()
-				.pagesize(500)
+				.pagesize(5000)
 				.num_pages(100)
 				.open(path)
 				.unwrap();
-			assert_eq!(db.pagesize(), 500);
+			assert_eq!(db.pagesize(), 5000);
 		}
 	}
 

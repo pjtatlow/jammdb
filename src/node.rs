@@ -25,6 +25,8 @@ pub(crate) struct Node {
 	// pub (crate) key: SliceParts,
 	pub(crate) children: Vec<NodeID>,
 	pub(crate) data: NodeData,
+	pub(crate) deleted: bool,
+	original_key: Option<SliceParts>,
 }
 
 pub(crate) enum NodeData {
@@ -62,6 +64,20 @@ impl NodeData {
 		match self {
 			NodeData::Branches(b) => NodeData::Branches(b.split_off(index)),
 			NodeData::Leaves(l) => NodeData::Leaves(l.split_off(index)),
+		}
+	}
+
+	fn merge(&mut self, other_data: &mut Self) {
+		match (self, other_data) {
+			(NodeData::Branches(b1), NodeData::Branches(b2)) => {
+				b1.append(b2);
+				b1.sort_unstable_by_key(|b| b.key);
+			}
+			(NodeData::Leaves(l1), NodeData::Leaves(l2)) => {
+				l1.append(l2);
+				l1.sort_unstable_by_key(|l| l.key_parts());
+			}
+			_ => panic!("incompatible data types"),
 		}
 	}
 }
@@ -108,10 +124,13 @@ impl Node {
 			bucket: b,
 			children: Vec::new(),
 			data,
+			deleted: false,
+			original_key: None,
 		}
 	}
 
 	pub(crate) fn with_data(id: NodeID, data: NodeData, b: Ptr<Bucket>) -> Node {
+		let original_key = Some(data.key_parts());
 		Node {
 			id,
 			page_id: 0,
@@ -119,6 +138,8 @@ impl Node {
 			bucket: b,
 			children: Vec::new(),
 			data,
+			deleted: false,
+			original_key,
 		}
 	}
 
@@ -143,6 +164,11 @@ impl Node {
 			}
 			_ => panic!("INVALID PAGE TYPE FOR FROM_PAGE"),
 		};
+		let original_key = if data.len() > 0 {
+			Some(data.key_parts())
+		} else {
+			None
+		};
 		Node {
 			id,
 			page_id: p.id,
@@ -150,6 +176,8 @@ impl Node {
 			bucket: b,
 			children: Vec::new(),
 			data,
+			deleted: false,
+			original_key,
 		}
 	}
 
@@ -185,11 +213,21 @@ impl Node {
 		}
 	}
 
+	pub(crate) fn delete(&mut self, index: usize) -> Data {
+		match &mut self.data {
+			NodeData::Branches(_) => panic!("CANNOT DELETE DATA FROM A BRANCH NODE"),
+			NodeData::Leaves(leaves) => leaves.remove(index),
+		}
+	}
+
 	fn size(&self) -> usize {
 		HEADER_SIZE + self.data.size()
 	}
 
 	pub(crate) fn write(&mut self, file: &mut File) -> Result<()> {
+		if self.deleted {
+			return Ok(());
+		}
 		let size = self.size();
 		let mut buf: Vec<u8> = vec![0; size];
 		#[allow(clippy::cast_ptr_alignment)]
@@ -201,12 +239,63 @@ impl Node {
 		Ok(())
 	}
 
-	pub(crate) fn merge(&mut self) {}
+	pub(crate) fn merge(&mut self) -> bool {
+		// merge children if it is a branch node
+		if let NodeData::Branches(branches) = &mut self.data {
+			let mut deleted_children = vec![];
+			for (i, child) in self.children.iter().enumerate() {
+				let mut b = Ptr::new(&self.bucket);
+				let child = self.bucket.node(PageNodeID::Node(*child));
+				// check if child needs to be merged.
+				if child.merge() {
+					// find the child's branch element in this node's data
+					let index = match branches
+						.binary_search_by_key(&child.original_key.unwrap().slice(), |b| b.key())
+					{
+						Ok(i) => i,
+						_ => panic!("THIS IS VERY VERY BAD"),
+					};
+					// check if there is any data left to copy
+					if child.data.len() > 0 {
+						// add that child's data to a sibling node
+						let sibling_page = if index == 0 {
+							// right sibline
+							branches[index + 1].page
+						} else {
+							// left sibling
+							branches[index - 1].page
+						};
+						let sibling = b.node(PageNodeID::Page(sibling_page));
+						sibling.data.merge(&mut child.data);
+					}
 
-	fn allocate(&mut self) {
+					// free the child's page and mark it as deleted
+					child.free_page();
+					child.deleted = true;
+
+					// remove the child from this node
+					branches.remove(index);
+					deleted_children.push(i);
+				}
+			}
+			for c in deleted_children.iter().rev() {
+				self.children.remove(*c);
+			}
+		}
+		// determine if this node needs to be merged, and return the value
+		// needs to be merged if it does not have enough keys, or if it doesn't fill 1/4 of a page
+		self.data.len() < MIN_KEYS_PER_NODE || self.size() < (self.bucket.tx.db.pagesize / 4)
+	}
+
+	pub(crate) fn free_page(&mut self) {
 		if self.page_id != 0 {
 			self.bucket.tx.free(self.page_id, self.num_pages);
+			self.page_id = 0;
 		}
+	}
+
+	fn allocate(&mut self) {
+		self.free_page();
 		let size = self.size();
 		let (page_id, num_pages) = self.bucket.tx.allocate(size);
 		self.page_id = page_id;
@@ -214,7 +303,6 @@ impl Node {
 	}
 
 	pub(crate) fn split(&mut self) -> Option<Vec<Branch>> {
-		let mut last_branch_index = 0;
 		// sort children so we iterate over them in order
 		let mut b = Ptr::new(&self.bucket);
 		self.children
@@ -223,15 +311,15 @@ impl Node {
 			let child = self.bucket.node(PageNodeID::Node(*child));
 			let new_branches = child.split();
 			if let NodeData::Branches(branches) = &mut self.data {
-				match &branches[last_branch_index..]
-					.binary_search_by_key(&child.data.key_parts().slice(), |b| b.key())
+				let index = match branches
+					.binary_search_by_key(&child.original_key.unwrap().slice(), |b| b.key())
 				{
-					Ok(i) => last_branch_index = *i,
+					Ok(i) => i,
 					_ => panic!("THIS IS VERY VERY BAD"),
-				}
-				branches[last_branch_index] = Branch::from_node(&child);
+				};
+				branches[index] = Branch::from_node(&child);
 				if let Some(mut new_branches) = new_branches {
-					let mut right_side = branches.split_off(last_branch_index + 1);
+					let mut right_side = branches.split_off(index + 1);
 					branches.append(&mut new_branches);
 					branches.append(&mut right_side);
 				}

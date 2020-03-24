@@ -3,7 +3,7 @@ use std::mem::size_of;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 
 use crate::bucket::BucketMeta;
-use crate::data::SliceParts;
+use crate::data::{BucketData, SliceParts};
 use crate::errors::Result;
 use crate::meta::Meta;
 use crate::node::{Node, NodeData, NodeType};
@@ -180,8 +180,12 @@ impl Page {
 				for (i, elem) in self.leaf_elements().iter().enumerate() {
 					match elem.node_type {
 						Node::TYPE_BUCKET => {
-							let parts = SliceParts::from_slice(elem.value());
-							let meta = unsafe { *(parts.slice()[0] as *const BucketMeta) };
+							// let parts = SliceParts::from_slice(elem.value());
+							let bd = BucketData::from_slice_parts(
+								SliceParts::from_slice(elem.key()),
+								SliceParts::from_slice(elem.value()),
+							);
+							let meta = bd.meta();
 							let elem_name = match std::str::from_utf8(elem.key()) {
 								// Ok(key) => format!("\"Index: {}\\nPage: {}\\nKey '{}'\\n {:?}\"", i, self.id, key, meta),
 								_ => format!(

@@ -155,6 +155,11 @@ impl Cursor {
 		}
 	}
 
+	pub(crate) fn current_index(&self) -> usize {
+		let e = self.stack.last().unwrap();
+		e.index
+	}
+
 	/// Moves the cursor to the given key.
 	/// If the key does not exist, the cursor stops "just before"
 	/// where the key _would_ be.

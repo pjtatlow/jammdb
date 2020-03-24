@@ -348,8 +348,25 @@ impl Bucket {
 		Ok(())
 	}
 
+	/// Deletes a key-value pair from the bucket
+	pub fn delete<T: AsRef<[u8]>>(&mut self, key: T) -> Result<Data> {
+		let mut c = self.cursor();
+		let exists = c.seek(key);
+		if exists {
+			let data = c.current().unwrap();
+			if data.is_kv() {
+				self.dirty = true;
+				let node = self.node(c.current_id());
+				Ok(node.delete(c.current_index()))
+			} else {
+				Err(Error::IncompatibleValue)
+			}
+		} else {
+			Err(Error::KeyValueMissing)
+		}
+	}
+
 	fn put_data(&mut self, data: Data) -> Result<()> {
-		self.dirty = true;
 		let mut c = self.cursor();
 		let exists = c.seek(data.key());
 		if exists {
@@ -362,6 +379,7 @@ impl Bucket {
 		}
 		let node = self.node(c.current_id());
 		node.insert_data(data);
+		self.dirty = true;
 		Ok(())
 	}
 
@@ -446,18 +464,44 @@ impl Bucket {
 			let meta = self.tx.copy_data(b.as_ref());
 			self.put_data(Data::Bucket(BucketData::from_slice_parts(name, meta)))?;
 		}
-		let mut root_id = self.root;
 		if self.dirty {
-			let mut root_node = self.node(self.root);
-			root_node.merge();
-			while let Some(mut branches) = root_node.split() {
-				branches.insert(0, Branch::from_node(root_node));
-				root_node = self.new_node(NodeData::Branches(branches));
+			// merge emptyish nodes first
+			{
+				let mut root_node = self.node(self.root);
+				let should_merge_root = root_node.merge();
+				// check if the root is a bucket and only has one node
+				if should_merge_root && !root_node.leaf() && root_node.data.len() == 1 {
+					// remove the branch and make the leaf node the root
+					root_node.free_page();
+					root_node.deleted = true;
+					let page_id = match &root_node.data {
+						NodeData::Branches(branches) => branches[0].page,
+						_ => panic!("uh wat"),
+					};
+					self.meta.root_page = page_id;
+					self.root = PageNodeID::Page(page_id);
+					// if the new root hasn't been modified, no need to split it
+					if !self.page_node_ids.contains_key(&page_id) {
+						self.dirty = false;
+						return Ok(self.meta);
+					}
+					// otherwise we'll continue to possibly split the new root
+					// this could result in re-adding a branch root node,
+					// but it's pretty unlikely!
+				}
 			}
-			root_id = PageNodeID::Node(root_node.id);
-			self.meta.root_page = root_node.page_id;
+			// split overflowing nodes
+			{
+				let mut root_node = self.node(self.root);
+				while let Some(mut branches) = root_node.split() {
+					branches.insert(0, Branch::from_node(root_node));
+					root_node = self.new_node(NodeData::Branches(branches));
+				}
+				let page_id = root_node.page_id;
+				self.root = PageNodeID::Node(root_node.page_id);
+				self.meta.root_page = page_id;
+			}
 		}
-		self.root = root_id;
 		Ok(self.meta)
 	}
 
@@ -467,7 +511,9 @@ impl Bucket {
 		}
 		if self.dirty {
 			for node in self.nodes.iter_mut() {
-				node.write(file)?;
+				if !node.deleted {
+					node.write(file)?;
+				}
 			}
 		}
 		Ok(())
