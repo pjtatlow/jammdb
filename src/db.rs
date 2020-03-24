@@ -343,7 +343,7 @@ mod tests {
 		{
 			let metadata = path.metadata().unwrap();
 			assert!(metadata.is_file());
-			assert_eq!(metadata.len(), 500000);
+			assert_eq!(metadata.len(), 500_000);
 		}
 		{
 			let db = OpenOptions::new()

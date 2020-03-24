@@ -1,4 +1,4 @@
-.PHONEY: coverage
+.PHONEY: coverage, readme
 
 coverage:
 	CARGO_INCREMENTAL=0 \
@@ -14,3 +14,8 @@ docs:
 	cargo +nightly doc
 docs-open:
 	cargo +nightly doc --open
+
+readme: README.md
+
+README.md: src/lib.rs Cargo.toml
+	cargo readme > README.md

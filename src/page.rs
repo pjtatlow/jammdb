@@ -2,7 +2,6 @@ use std::io::Write;
 use std::mem::size_of;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 
-use crate::bucket::BucketMeta;
 use crate::data::{BucketData, SliceParts};
 use crate::errors::Result;
 use crate::meta::Meta;
