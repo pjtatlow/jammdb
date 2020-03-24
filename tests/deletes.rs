@@ -4,7 +4,7 @@ use std::collections::HashSet;
 mod common;
 
 #[test]
-fn delete_range() -> Result<(), Error> {
+fn delete_random() -> Result<(), Error> {
 	let random_file = common::RandomFile::new();
 	let mut deleted = HashSet::new();
 	let mut rng = rand::thread_rng();
