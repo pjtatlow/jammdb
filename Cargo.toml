@@ -8,7 +8,7 @@ license = "MIT"
 repo = "https://github.com/pjtatlow/jammdb"
 readme = "README.md"
 keywords = ["db", "database", "embedded-database", "memory map"]
-categories = ["database ", "database-implementations"]
+categories = ["database", "database-implementations"]
 
 [dependencies]
 memmap = "0.7.0"

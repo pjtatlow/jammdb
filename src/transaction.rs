@@ -134,6 +134,7 @@ impl<'a> Transaction<'a> {
 	}
 
 	#[doc(hidden)]
+	#[cfg_attr(tarpaulin, skip)]
 	pub fn print_graph(&self) {
 		println!("digraph G {{");
 		self.inner.root.as_ref().unwrap().print();

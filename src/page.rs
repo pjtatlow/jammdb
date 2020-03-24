@@ -157,6 +157,7 @@ impl Page {
 		Ok(())
 	}
 
+	#[cfg_attr(tarpaulin, skip)]
 	pub fn print(&self, tx: &TransactionInner) {
 		let name = self.name();
 		println!("{} [style=\"filled\", fillcolor=\"darkorchid1\"];", name);
@@ -229,6 +230,7 @@ impl Page {
 		}
 	}
 
+	#[cfg_attr(tarpaulin, skip)]
 	pub fn name(&self) -> String {
 		let size = 4096 + (self.overflow * 4096);
 		format!(

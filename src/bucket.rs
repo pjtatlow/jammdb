@@ -520,6 +520,7 @@ impl Bucket {
 	}
 
 	#[doc(hidden)]
+	#[cfg_attr(tarpaulin, skip)]
 	pub fn print(&self) {
 		let page = self.tx.page(self.meta.root_page);
 		page.print(&self.tx);
