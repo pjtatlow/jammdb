@@ -1,5 +1,4 @@
-use rand::{Rng, distributions::Alphanumeric};
-
+use rand::{distributions::Alphanumeric, Rng};
 
 pub struct RandomFile {
 	pub path: std::path::PathBuf,
@@ -13,8 +12,8 @@ impl RandomFile {
 				.take(30)
 				.collect();
 			let path = std::env::temp_dir().join(filename);
-			if let Err(_) =  path.metadata() {
-				return RandomFile{path};
+			if let Err(_) = path.metadata() {
+				return RandomFile { path };
 			}
 		}
 	}
@@ -24,6 +23,6 @@ impl Drop for RandomFile {
 	#[allow(unused_must_use)]
 	fn drop(&mut self) {
 		println!("{:?}", self.path);
-        std::fs::remove_file(&self.path);
-    }
+		std::fs::remove_file(&self.path);
+	}
 }

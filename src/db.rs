@@ -312,36 +312,22 @@ fn init_file(path: &Path, pagesize: usize, num_pages: usize) -> Result<File> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use rand::{distributions::Alphanumeric, Rng};
-	use std::path::PathBuf;
-
-	fn random_file() -> PathBuf {
-		loop {
-			let filename: String = rand::thread_rng()
-				.sample_iter(&Alphanumeric)
-				.take(30)
-				.collect();
-			let path = std::env::temp_dir().join(filename);
-			if path.metadata().is_err() {
-				return path;
-			}
-		}
-	}
+	use crate::testutil::RandomFile;
 
 	#[test]
 	fn test_open_options() {
 		assert_ne!(getPageSize(), 5000);
-		let path = random_file();
+		let random_file = RandomFile::new();
 		{
 			let db = OpenOptions::new()
 				.pagesize(5000)
 				.num_pages(100)
-				.open(path.clone())
+				.open(&random_file.path)
 				.unwrap();
 			assert_eq!(db.pagesize(), 5000);
 		}
 		{
-			let metadata = path.metadata().unwrap();
+			let metadata = random_file.path.metadata().unwrap();
 			assert!(metadata.is_file());
 			assert_eq!(metadata.len(), 500_000);
 		}
@@ -349,7 +335,7 @@ mod tests {
 			let db = OpenOptions::new()
 				.pagesize(5000)
 				.num_pages(100)
-				.open(path)
+				.open(&random_file.path)
 				.unwrap();
 			assert_eq!(db.pagesize(), 5000);
 		}
@@ -358,16 +344,16 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn test_different_pagesizes() {
-		assert_ne!(getPageSize(), 500);
-		let path = random_file();
+		assert_ne!(getPageSize(), 5000);
+		let random_file = RandomFile::new();
 		{
 			let db = OpenOptions::new()
-				.pagesize(500)
+				.pagesize(5000)
 				.num_pages(100)
-				.open(path.clone())
+				.open(&random_file.path)
 				.unwrap();
-			assert_eq!(db.pagesize(), 500);
+			assert_eq!(db.pagesize(), 5000);
 		}
-		DB::open(path).unwrap();
+		DB::open(&random_file.path).unwrap();
 	}
 }

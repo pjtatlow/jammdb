@@ -37,3 +37,34 @@ pub use data::*;
 pub use db::{OpenOptions, DB};
 pub use errors::*;
 pub use transaction::Transaction;
+
+#[cfg(test)]
+mod testutil {
+	use rand::{distributions::Alphanumeric, Rng};
+
+	pub struct RandomFile {
+		pub path: std::path::PathBuf,
+	}
+
+	impl RandomFile {
+		pub fn new() -> RandomFile {
+			loop {
+				let filename: String = rand::thread_rng()
+					.sample_iter(&Alphanumeric)
+					.take(30)
+					.collect();
+				let path = std::env::temp_dir().join(filename);
+				if path.metadata().is_err() {
+					return RandomFile { path };
+				}
+			}
+		}
+	}
+
+	impl Drop for RandomFile {
+		#[allow(unused_must_use)]
+		fn drop(&mut self) {
+			std::fs::remove_file(&self.path);
+		}
+	}
+}

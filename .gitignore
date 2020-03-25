@@ -2,3 +2,4 @@
 **/*.rs.bk
 .vscode
 *.db
+./src/bin/*.rs

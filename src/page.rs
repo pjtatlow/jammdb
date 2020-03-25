@@ -37,17 +37,17 @@ impl Page {
 	}
 
 	pub(crate) fn meta(&self) -> &Meta {
-		// assert_type(self.page_type, Page::TYPE_META);
+		assert_eq!(self.page_type, Page::TYPE_META);
 		unsafe { &*(&self.ptr as *const usize as *const Meta) }
 	}
 
 	pub(crate) fn meta_mut(&mut self) -> &mut Meta {
-		// assert_type(self.page_type, Page::TYPE_META);
+		assert_eq!(self.page_type, Page::TYPE_META);
 		unsafe { &mut *(&mut self.ptr as *mut usize as *mut Meta) }
 	}
 
 	pub(crate) fn freelist(&self) -> &[PageID] {
-		assert_type(self.page_type, Page::TYPE_FREELIST);
+		assert_eq!(self.page_type, Page::TYPE_FREELIST);
 		unsafe {
 			let start = &self.ptr as *const usize as *const PageID;
 			from_raw_parts(start, self.count as usize)
@@ -55,7 +55,7 @@ impl Page {
 	}
 
 	pub(crate) fn freelist_mut(&mut self) -> &mut [PageID] {
-		assert_type(self.page_type, Page::TYPE_FREELIST);
+		assert_eq!(self.page_type, Page::TYPE_FREELIST);
 		unsafe {
 			let start = &self.ptr as *const usize as *mut PageID;
 			from_raw_parts_mut(start, self.count as usize)
@@ -63,7 +63,7 @@ impl Page {
 	}
 
 	pub(crate) fn leaf_elements(&self) -> &[LeafElement] {
-		assert_type(self.page_type, Page::TYPE_LEAF);
+		assert_eq!(self.page_type, Page::TYPE_LEAF);
 		unsafe {
 			let start = &self.ptr as *const usize as *const LeafElement;
 			from_raw_parts(start, self.count as usize)
@@ -71,7 +71,7 @@ impl Page {
 	}
 
 	pub(crate) fn branch_elements(&self) -> &[BranchElement] {
-		assert_type(self.page_type, Page::TYPE_BRANCH);
+		assert_eq!(self.page_type, Page::TYPE_BRANCH);
 		unsafe {
 			let start = &self.ptr as *const usize as *const BranchElement;
 			from_raw_parts(start, self.count as usize)
@@ -79,7 +79,7 @@ impl Page {
 	}
 
 	pub(crate) fn leaf_elements_mut(&mut self) -> &mut [LeafElement] {
-		assert_type(self.page_type, Page::TYPE_LEAF);
+		assert_eq!(self.page_type, Page::TYPE_LEAF);
 		unsafe {
 			let start = &self.ptr as *const usize as *const LeafElement as *mut LeafElement;
 			from_raw_parts_mut(start, self.count as usize)
@@ -87,7 +87,7 @@ impl Page {
 	}
 
 	pub(crate) fn branch_elements_mut(&mut self) -> &mut [BranchElement] {
-		assert_type(self.page_type, Page::TYPE_BRANCH);
+		assert_eq!(self.page_type, Page::TYPE_BRANCH);
 		unsafe {
 			let start = &self.ptr as *const usize as *const BranchElement as *mut BranchElement;
 			from_raw_parts_mut(start, self.count as usize)
@@ -242,6 +242,7 @@ impl Page {
 	}
 }
 
+#[cfg_attr(tarpaulin, skip)]
 fn type_str(pt: PageType) -> String {
 	match pt {
 		Page::TYPE_BRANCH => String::from("Branch"),
@@ -249,16 +250,6 @@ fn type_str(pt: PageType) -> String {
 		Page::TYPE_LEAF => String::from("Leaf"),
 		Page::TYPE_META => String::from("Meta"),
 		_ => format!("Invalid ({:#X})", pt),
-	}
-}
-
-fn assert_type(actual: PageType, expected: PageType) {
-	if actual != expected {
-		panic!(format!(
-			"expected page type \"{}\" but got \"{}\"",
-			type_str(expected),
-			type_str(actual)
-		));
 	}
 }
 
