@@ -322,7 +322,7 @@ mod tests {
 			let db = OpenOptions::new()
 				.pagesize(5000)
 				.num_pages(100)
-				.open(&random_file.path)
+				.open(&random_file)
 				.unwrap();
 			assert_eq!(db.pagesize(), 5000);
 		}
@@ -335,10 +335,22 @@ mod tests {
 			let db = OpenOptions::new()
 				.pagesize(5000)
 				.num_pages(100)
-				.open(&random_file.path)
+				.open(&random_file)
 				.unwrap();
 			assert_eq!(db.pagesize(), 5000);
 		}
+	}
+
+	#[test]
+	#[should_panic]
+	fn test_open_options_min_pages() {
+		OpenOptions::new().num_pages(3);
+	}
+
+	#[test]
+	#[should_panic]
+	fn test_open_options_min_pagesize() {
+		OpenOptions::new().pagesize(1000);
 	}
 
 	#[test]
@@ -350,10 +362,10 @@ mod tests {
 			let db = OpenOptions::new()
 				.pagesize(5000)
 				.num_pages(100)
-				.open(&random_file.path)
+				.open(&random_file)
 				.unwrap();
 			assert_eq!(db.pagesize(), 5000);
 		}
-		DB::open(&random_file.path).unwrap();
+		DB::open(&random_file).unwrap();
 	}
 }
