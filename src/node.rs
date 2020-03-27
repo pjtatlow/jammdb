@@ -1,6 +1,11 @@
 use std::fs::File;
 use std::mem::size_of;
+
+#[cfg(unix)]
 use std::os::unix::fs::FileExt;
+
+#[cfg(windows)]
+use std::os::windows::fs::FileExt;
 
 use crate::bucket::Bucket;
 use crate::cursor::PageNodeID;

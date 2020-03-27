@@ -61,6 +61,12 @@ mod testutil {
 		}
 	}
 
+	impl AsRef<std::path::Path> for RandomFile {
+		fn as_ref(&self) -> &std::path::Path {
+			self.path.as_ref()
+		}
+	}
+
 	impl Drop for RandomFile {
 		#[allow(unused_must_use)]
 		fn drop(&mut self) {

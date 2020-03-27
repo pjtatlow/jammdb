@@ -1,8 +1,13 @@
 use std::fs::File;
 use std::io::Write;
-use std::os::unix::fs::FileExt;
 use std::pin::Pin;
 use std::sync::{Arc, MutexGuard};
+
+#[cfg(unix)]
+use std::os::unix::fs::FileExt;
+
+#[cfg(windows)]
+use std::os::windows::fs::FileExt;
 
 use memmap::Mmap;
 
@@ -196,19 +201,13 @@ impl<'a> TransactionInner {
 	}
 
 	pub(crate) fn get_bucket(&'a mut self, name: &[u8]) -> Result<&'a mut Bucket> {
-		debug_assert!(self.root.is_some());
-		if let Some(root) = self.root.as_mut() {
-			return root.get_bucket(name);
-		}
-		panic!("");
+		let root = self.root.as_mut().unwrap();
+		root.get_bucket(name)
 	}
 
 	pub(crate) fn create_bucket(&'a mut self, name: &[u8]) -> Result<&'a mut Bucket> {
-		debug_assert!(self.root.is_some());
-		if let Some(root) = self.root.as_mut() {
-			return root.create_bucket(name);
-		}
-		panic!("");
+		let root = self.root.as_mut().unwrap();
+		root.create_bucket(name)
 	}
 
 	pub(crate) fn copy_data(&mut self, data: &[u8]) -> SliceParts {
@@ -224,7 +223,11 @@ impl<'a> TransactionInner {
 	}
 
 	pub(crate) fn allocate(&mut self, bytes: usize) -> (PageID, usize) {
-		let num_pages = (bytes / self.db.pagesize) + 1;
+		let num_pages = if (bytes % self.db.pagesize) == 0 {
+			bytes / self.db.pagesize
+		} else {
+			(bytes / self.db.pagesize) + 1
+		};
 		let page_id = match self.freelist.allocate(num_pages) {
 			Some(page_id) => page_id,
 			None => {
@@ -316,12 +319,175 @@ impl Drop for TransactionInner {
 			let mut open_txs = self.db.open_ro_txs.lock().unwrap();
 			let index = match open_txs.binary_search(&self.meta.tx_id) {
 				Ok(i) => i,
-				_ => {
-					debug_assert!(false, "dropped transaction id does not exist");
-					return;
-				}
+				_ => return, // this shouldn't happen, but isn't the end of the world if it does
 			};
 			open_txs.remove(index);
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::db::OpenOptions;
+	use crate::testutil::RandomFile;
+
+	#[test]
+	fn test_concurrent_txs() -> Result<()> {
+		let random_file = RandomFile::new();
+		let mut db = OpenOptions::new()
+			.pagesize(1024)
+			.num_pages(4)
+			.open(&random_file)?;
+		{
+			// create a read-only tx
+			let mut db_clone = db.clone();
+			let tx = db_clone.tx(false)?;
+			assert!(tx.file.is_none());
+			let tx: &TransactionInner = &tx.inner;
+			assert_eq!(tx.data.len(), 1024 * 4);
+			assert!(tx.root.is_some());
+			{
+				let open_ro_txs = tx.db.open_ro_txs.lock().unwrap();
+				assert_eq!(open_ro_txs.len(), 1);
+				assert_eq!(open_ro_txs[0], tx.meta.tx_id);
+			}
+			{
+				// create a writable transaction while the read-only transaction is still open
+				let mut db_clone = db.clone();
+				let mut tx = db_clone.tx(true)?;
+				assert!(tx.file.is_some());
+				assert_eq!(tx.inner.meta.tx_id, 1);
+				assert_eq!(tx.inner.freelist.pages(), vec![]);
+				let b = tx.create_bucket("abc")?;
+				b.put("123", "456")?;
+				tx.commit()?;
+			}
+			{
+				// create a second writable transaction while the read-only transaction is still open
+				let mut db_clone = db.clone();
+				let mut tx = db_clone.tx(true)?;
+				assert!(tx.file.is_some());
+				assert_eq!(tx.inner.meta.tx_id, 2);
+				assert_eq!(tx.inner.freelist.pages(), vec![2, 3]);
+				let b = tx.get_bucket("abc")?;
+				b.put("123", "456")?;
+				tx.commit()?;
+			}
+			// let the read-only tx drop
+		}
+		{
+			// make sure we can reuse the freelist
+			let mut tx = db.tx(true)?;
+			assert!(tx.file.is_some());
+			assert_eq!(tx.inner.freelist.pages(), vec![2, 3, 4, 5, 6]);
+			// allocate some pages from the freelist
+			assert_eq!(tx.inner.meta.num_pages, 9);
+			assert_eq!(tx.inner.allocate(1), (2, 1));
+			assert_eq!(tx.inner.allocate(1), (3, 1));
+			assert_eq!(tx.inner.allocate(1), (4, 1));
+			assert_eq!(tx.inner.allocate(1), (5, 1));
+			assert_eq!(tx.inner.allocate(1), (6, 1));
+			// freelist should be empty so make sure the page is new
+			assert_eq!(tx.inner.meta.num_pages, 9);
+			assert_eq!(tx.inner.allocate(1), (10, 1));
+			assert_eq!(tx.inner.meta.num_pages, 10);
+			assert_eq!(tx.inner.freelist.pages(), vec![]);
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn test_allocate_no_freelist() -> Result<()> {
+		let random_file = RandomFile::new();
+		let mut db = OpenOptions::new()
+			.pagesize(1024)
+			.num_pages(4)
+			.open(&random_file)?;
+		let tx = db.tx(false)?;
+		let mut tx = tx.inner;
+		// make sure we have an empty freelist and only four pages
+		assert_eq!(tx.freelist.pages().len(), 0);
+		assert_eq!(tx.meta.num_pages, 3);
+		// allocate one page worth of bytes
+		assert_eq!(tx.allocate(1024), (4, 1));
+		// allocate a half page worth of bytes
+		assert_eq!(tx.allocate(512), (5, 1));
+		// allocate ten pages worth of bytes
+		assert_eq!(tx.allocate(10240), (6, 10));
+		// allocate a non pagesize number of bytes
+		assert_eq!(tx.allocate(1234), (16, 2));
+		Ok(())
+	}
+
+	#[test]
+	fn test_allocate_freelist() -> Result<()> {
+		let random_file = RandomFile::new();
+		let mut db = OpenOptions::new()
+			.pagesize(1024)
+			.num_pages(100)
+			.open(&random_file)?;
+		let tx = db.tx(false)?;
+		let mut tx = tx.inner;
+
+		// setup the freelist and num_pages to simulate a used database
+		for page in [10_usize, 11, 13, 14, 15].iter() {
+			tx.freelist.free(0, *page);
+		}
+		tx.freelist.release(1);
+		tx.meta.num_pages = 99;
+
+		// allocate one page worth of bytes (should come from freelist)
+		assert_eq!(tx.allocate(1024), (10, 1));
+		// allocate a half page worth of bytes (should come from freelist)
+		assert_eq!(tx.allocate(512), (11, 1));
+		// allocate 3 pages worth of bytes (should come from freelist)
+		assert_eq!(tx.allocate(3000), (13, 3));
+		// allocate one byte (freelist should be empty now)
+		assert_eq!(tx.allocate(1), (100, 1));
+		Ok(())
+	}
+
+	#[test]
+	fn test_free() -> Result<()> {
+		let random_file = RandomFile::new();
+		let mut db = OpenOptions::new()
+			.pagesize(1024)
+			.num_pages(100)
+			.open(&random_file)?;
+		let tx = db.tx(false)?;
+		let mut tx = tx.inner;
+
+		assert_eq!(tx.meta.tx_id, 0);
+		assert_eq!(tx.freelist.pages().len(), 0);
+		tx.free(80, 1);
+		assert_eq!(tx.freelist.pages(), vec![80]);
+		tx.free(100, 6);
+		assert_eq!(tx.freelist.pages(), vec![80, 100, 101, 102, 103, 104, 105]);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_copy_data() -> Result<()> {
+		let random_file = RandomFile::new();
+		let mut db = OpenOptions::new()
+			.pagesize(1024)
+			.num_pages(100)
+			.open(&random_file)?;
+		let tx = db.tx(false)?;
+		let mut tx = tx.inner;
+
+		let data = vec![1, 2, 3];
+		let parts = tx.copy_data(&data);
+		assert_eq!(parts.slice(), data.as_slice());
+		let data2 = vec![4, 5, 6];
+		let parts2 = tx.copy_data(&data2);
+		assert_eq!(parts.slice(), data.as_slice());
+		assert_eq!(parts2.slice(), data2.as_slice());
+		assert_eq!(tx.buffers.len(), 2);
+		assert_eq!(tx.buffers[0], data);
+		assert_eq!(tx.buffers[1], data2);
+		Ok(())
 	}
 }
