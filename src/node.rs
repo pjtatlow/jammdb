@@ -249,6 +249,10 @@ impl Node {
 		if let NodeData::Branches(branches) = &mut self.data {
 			let mut deleted_children = vec![];
 			for (i, child) in self.children.iter().enumerate() {
+				// stop if there is only one branch left
+				if branches.len() == 1 {
+					break;
+				}
 				let mut b = Ptr::new(&self.bucket);
 				let child = self.bucket.node(PageNodeID::Node(*child));
 				// check if child needs to be merged.
@@ -264,7 +268,7 @@ impl Node {
 					if child.data.len() > 0 {
 						// add that child's data to a sibling node
 						let sibling_page = if index == 0 {
-							// right sibline
+							// right sibling
 							branches[index + 1].page
 						} else {
 							// left sibling

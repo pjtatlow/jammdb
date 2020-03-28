@@ -220,12 +220,12 @@ impl Bucket {
 		let key = Vec::from(name);
 		self.new_child(&key);
 
-		let data;
-		{
+		let data = {
 			let b = self.buckets.get(&key).unwrap();
 			let key = self.tx.copy_data(name);
-			data = Data::Bucket(BucketData::from_meta(key, &b.meta));
-		}
+
+			Data::Bucket(BucketData::from_meta(key, &b.meta))
+		};
 
 		let node = self.node(c.current_id());
 		node.insert_data(data);
@@ -350,6 +350,9 @@ impl Bucket {
 
 	/// Deletes a key-value pair from the bucket
 	pub fn delete<T: AsRef<[u8]>>(&mut self, key: T) -> Result<Data> {
+		if !self.tx.writable {
+			return Err(Error::ReadOnlyTx);
+		}
 		let mut c = self.cursor();
 		let exists = c.seek(key);
 		if exists {
@@ -541,5 +544,47 @@ impl AsRef<[u8]> for BucketMeta {
 	fn as_ref(&self) -> &[u8] {
 		let ptr = self as *const BucketMeta as *const u8;
 		unsafe { std::slice::from_raw_parts(ptr, META_SIZE) }
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::db::DB;
+	use crate::testutil::RandomFile;
+
+	#[test]
+	fn test_incompatible_values() -> Result<()> {
+		let random_file = RandomFile::new();
+		let mut db = DB::open(&random_file)?;
+		{
+			let mut tx = db.tx(true)?;
+			assert_eq!(tx.get_bucket("abc").err(), Some(Error::BucketMissing));
+			let b = tx.create_bucket("abc")?;
+			b.put("key", "value")?;
+			assert_eq!(b.create_bucket("key").err(), Some(Error::IncompatibleValue));
+			b.create_bucket("nested-bucket")?;
+			assert_eq!(
+				b.put("nested-bucket", "value"),
+				Err(Error::IncompatibleValue)
+			);
+			assert_eq!(
+				b.create_bucket("nested-bucket").err(),
+				Some(Error::BucketExists)
+			);
+
+			assert_eq!(b.delete("missing-key"), Err(Error::KeyValueMissing));
+			tx.commit()?;
+		}
+		{
+			let mut tx = db.tx(true)?;
+			let b = tx.get_bucket("abc")?;
+			assert_eq!(b.create_bucket("key").err(), Some(Error::IncompatibleValue));
+			assert_eq!(
+				b.put("nested-bucket", "value"),
+				Err(Error::IncompatibleValue)
+			);
+		}
+		Ok(())
 	}
 }

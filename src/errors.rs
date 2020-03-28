@@ -50,3 +50,18 @@ impl<T> From<PoisonError<T>> for Error {
         Error::SyncError("lock poisoned")
     }
 }
+
+impl PartialEq for Error {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Error::BucketExists, Error::BucketExists) => true,
+            (Error::BucketMissing, Error::BucketMissing) => true,
+            (Error::KeyValueMissing, Error::KeyValueMissing) => true,
+            (Error::IncompatibleValue, Error::IncompatibleValue) => true,
+            (Error::ReadOnlyTx, Error::ReadOnlyTx) => true,
+            (Error::IOError(s1), Error::IOError(s2)) => format!("{}", s1) == format!("{}", s2),
+            (Error::SyncError(s1), Error::SyncError(s2)) => s1 == s2,
+            _ => false,
+        }
+    }
+}

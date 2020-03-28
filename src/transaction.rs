@@ -329,8 +329,30 @@ impl Drop for TransactionInner {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::db::OpenOptions;
+	use crate::db::{OpenOptions, DB};
 	use crate::testutil::RandomFile;
+
+	#[test]
+	fn test_ro_txs() -> Result<()> {
+		let random_file = RandomFile::new();
+		let mut db = DB::open(&random_file)?;
+
+		{
+			let mut tx = db.tx(true)?;
+			assert!(tx.create_bucket("abc").is_ok());
+			tx.commit()?;
+		}
+
+		let mut tx = db.tx(false)?;
+		assert!(tx.create_bucket("def").is_err());
+		let b = tx.get_bucket("abc")?;
+		assert_eq!(b.put("key", "value"), Err(Error::ReadOnlyTx));
+		assert_eq!(b.delete("key"), Err(Error::ReadOnlyTx));
+		assert_eq!(b.create_bucket("dev").err(), Some(Error::ReadOnlyTx));
+		assert_eq!(tx.commit(), Err(Error::ReadOnlyTx));
+
+		Ok(())
+	}
 
 	#[test]
 	fn test_concurrent_txs() -> Result<()> {
