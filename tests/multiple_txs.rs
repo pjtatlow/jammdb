@@ -50,8 +50,7 @@ fn tx_isolation() -> Result<(), Error> {
 		check_data(rw_b, 101, 4);
 		check_data(ro_b, 11, 1);
 	}
-
-	Ok(())
+	db.check()
 }
 
 fn check_data(b: &Bucket, len: u64, repeats: usize) {

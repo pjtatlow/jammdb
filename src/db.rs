@@ -170,6 +170,12 @@ impl DB {
 	pub fn pagesize(&self) -> usize {
 		self.0.pagesize
 	}
+
+	#[doc(hidden)]
+	pub fn check(&mut self) -> Result<()> {
+		let tx = self.tx(false)?;
+		tx.check()
+	}
 }
 
 pub(crate) struct DBInner {

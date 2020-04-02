@@ -22,7 +22,6 @@ impl RandomFile {
 impl Drop for RandomFile {
 	#[allow(unused_must_use)]
 	fn drop(&mut self) {
-		println!("{:?}", self.path);
 		std::fs::remove_file(&self.path);
 	}
 }

@@ -102,6 +102,6 @@ fn test_deletes(highest_int: u64) -> Result<(), Error> {
 				break;
 			}
 		}
+		db.check()
 	}
-	Ok(())
 }

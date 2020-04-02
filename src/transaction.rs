@@ -12,12 +12,13 @@ use std::os::windows::fs::FileExt;
 use memmap::Mmap;
 
 use crate::bucket::Bucket;
-use crate::data::SliceParts;
+use crate::data::{BucketData, SliceParts};
 use crate::db::{DBInner, MIN_ALLOC_SIZE};
 use crate::errors::Error;
 use crate::errors::Result;
 use crate::freelist::Freelist;
 use crate::meta::Meta;
+use crate::node::Node;
 use crate::page::{Page, PageID};
 use crate::ptr::Ptr;
 
@@ -144,6 +145,10 @@ impl<'a> Transaction<'a> {
 		println!("digraph G {{");
 		self.inner.root.as_ref().unwrap().print();
 		println!("}}");
+	}
+
+	pub(crate) fn check(&self) -> Result<()> {
+		self.inner.check()
 	}
 }
 
@@ -309,6 +314,100 @@ impl<'a> TransactionInner {
 		file.sync_all()?;
 
 		self.db.freelist = self.freelist.clone();
+		Ok(())
+	}
+
+	fn check(&self) -> Result<()> {
+		use std::collections::HashSet;
+		let mut unused_pages: HashSet<usize> = (2..=self.meta.num_pages).collect();
+		if !unused_pages.remove(&self.meta.freelist_page) {
+			#[cfg_attr(tarpaulin, skip)]
+			return Err(Error::InvalidDB(format!(
+				"Freelist Page {} missing from unused_pages",
+				self.meta.freelist_page,
+			)));
+		}
+		for page_id in self.freelist.pages() {
+			if !unused_pages.remove(&page_id) {
+				#[cfg_attr(tarpaulin, skip)]
+				return Err(Error::InvalidDB(format!(
+					"Page {} from freelist missing from unused_pages",
+					page_id,
+				)));
+			}
+		}
+		let mut page_stack = Vec::new();
+		page_stack.push(self.meta.root.root_page);
+		while !page_stack.is_empty() {
+			let page_id = page_stack.pop().unwrap();
+			if !unused_pages.remove(&page_id) {
+				#[cfg_attr(tarpaulin, skip)]
+				return Err(Error::InvalidDB(format!(
+					"Page {} missing from unused_pages",
+					page_id,
+				)));
+			}
+			let page = self.page(page_id);
+			match page.page_type {
+				Page::TYPE_BRANCH => {
+					let mut last: Option<&[u8]> = None;
+					for (i, b) in page.branch_elements().iter().enumerate() {
+						page_stack.push(b.page);
+						if i > 0 && last.unwrap() >= b.key() {
+							#[cfg_attr(tarpaulin, skip)]
+							return Err(Error::InvalidDB(format!(
+								"Page {} contains unsorted elements",
+								page_id
+							)));
+						}
+						last = Some(b.key());
+					}
+				}
+				Page::TYPE_LEAF => {
+					let mut last: Option<&[u8]> = None;
+					for (i, leaf) in page.leaf_elements().iter().enumerate() {
+						match leaf.node_type {
+							Node::TYPE_BUCKET => {
+								let bucket_data = BucketData::new(leaf.key(), leaf.value());
+								page_stack.push(bucket_data.meta().root_page);
+							}
+							Node::TYPE_DATA => (),
+							_ =>
+							{
+								#[cfg_attr(tarpaulin, skip)]
+								return Err(Error::InvalidDB(format!(
+									"Page {} index {} has an invalid node type {}",
+									page_id, i, leaf.node_type,
+								)))
+							}
+						}
+						if i > 0 && last.unwrap() >= leaf.key() {
+							#[cfg_attr(tarpaulin, skip)]
+							return Err(Error::InvalidDB(format!(
+								"Page {} contains unsorted elements",
+								page_id
+							)));
+						}
+						last = Some(leaf.key());
+					}
+				}
+				_ =>
+				{
+					#[cfg_attr(tarpaulin, skip)]
+					return Err(Error::InvalidDB(format!(
+						"Invalid page type {} for page {}",
+						page.page_type, page_id,
+					)))
+				}
+			}
+		}
+		if !unused_pages.is_empty() {
+			#[cfg_attr(tarpaulin, skip)]
+			return Err(Error::InvalidDB(format!(
+				"Unreachable pages {:?}",
+				unused_pages,
+			)));
+		}
 		Ok(())
 	}
 }

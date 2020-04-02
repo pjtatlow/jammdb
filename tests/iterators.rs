@@ -170,7 +170,8 @@ fn cursor_seek() -> Result<(), Error> {
 			check_cursor("bl", &fruits[6..], b, 6);
 		}
 	}
-	Ok(())
+	let mut db = DB::open(&random_file.path)?;
+	db.check()
 }
 
 // checks every start position and checks that you can iterate

@@ -21,6 +21,8 @@ pub enum Error {
     IOError(std::io::Error),
     /// Wrapper around a [`PoisonError`]
     SyncError(&'static str),
+    /// Error returned when the DB is found to be in an invalid state
+    InvalidDB(String),
 }
 
 impl StdError for Error {}
@@ -35,6 +37,7 @@ impl fmt::Display for Error {
             Error::ReadOnlyTx => write!(f, "Cannot write in a read-only transaction"),
             Error::IOError(e) => write!(f, "IO Error: {}", e),
             Error::SyncError(s) => write!(f, "Sync Error: {}", s),
+            Error::InvalidDB(s) => write!(f, "Invalid DB: {}", s),
         }
     }
 }
@@ -61,6 +64,7 @@ impl PartialEq for Error {
             (Error::ReadOnlyTx, Error::ReadOnlyTx) => true,
             (Error::IOError(s1), Error::IOError(s2)) => format!("{}", s1) == format!("{}", s2),
             (Error::SyncError(s1), Error::SyncError(s2)) => s1 == s2,
+            (Error::InvalidDB(s1), Error::InvalidDB(s2)) => s1 == s2,
             _ => false,
         }
     }

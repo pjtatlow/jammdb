@@ -58,7 +58,8 @@ fn sibling_buckets() -> Result<(), Error> {
 			check_data(&b2, 901, 2, vec![]);
 		}
 	}
-	Ok(())
+	let mut db = DB::open(&random_file.path)?;
+	db.check()
 }
 
 #[test]
@@ -106,7 +107,8 @@ fn nested_buckets() -> Result<(), Error> {
 			tx.commit()?;
 		}
 	}
-	Ok(())
+	let mut db = DB::open(&random_file.path)?;
+	db.check()
 }
 
 fn check_data(b: &Bucket, len: u64, repeats: usize, bucket_names: Vec<Vec<u8>>) {

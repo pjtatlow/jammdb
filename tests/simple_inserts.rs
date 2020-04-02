@@ -63,7 +63,8 @@ fn test_insert(mut values: Vec<u64>) -> Result<(), Error> {
 		let missing_key = (values.len() + 1) as u64;
 		assert!(b.get(missing_key.to_be_bytes()).is_none());
 	}
-	Ok(())
+	let mut db = DB::open(&random_file.path)?;
+	db.check()
 }
 
 fn check_data(b: &Bucket, len: u64, repeats: usize) {

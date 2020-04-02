@@ -248,13 +248,15 @@ impl Node {
 		// merge children if it is a branch node
 		if let NodeData::Branches(branches) = &mut self.data {
 			let mut deleted_children = vec![];
-			for (i, child) in self.children.iter().enumerate() {
+			let mut i = 0;
+			while i < self.children.len() {
 				// stop if there is only one branch left
 				if branches.len() == 1 {
 					break;
 				}
 				let mut b = Ptr::new(&self.bucket);
-				let child = self.bucket.node(PageNodeID::Node(*child));
+				let id = PageNodeID::Node(self.children[i]);
+				let child = self.bucket.node(id);
 				// check if child needs to be merged.
 				if child.merge() {
 					// find the child's branch element in this node's data
@@ -286,6 +288,7 @@ impl Node {
 					branches.remove(index);
 					deleted_children.push(i);
 				}
+				i += 1;
 			}
 			for c in deleted_children.iter().rev() {
 				self.children.remove(*c);
