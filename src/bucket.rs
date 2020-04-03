@@ -126,8 +126,8 @@ impl Bucket {
 	/// Gets an already created bucket.
 	///
 	/// Returns an error if
-	/// 1. the given key does not exist, or
-	/// 2. the key is for key / value data, not a bucket.
+	/// 1. the given key does not exist
+	/// 2. the key is for key / value data, not a bucket
 	///
 	/// # Examples
 	///
@@ -178,7 +178,9 @@ impl Bucket {
 
 	/// Creates a new bucket.
 	///
-	/// Returns an error if the given key already exists.
+	/// Returns an error if
+	/// 1. the given key already exists
+	/// 2. It is in a read-only transaction
 	///
 	/// # Examples
 	///
@@ -231,6 +233,90 @@ impl Bucket {
 		node.insert_data(data);
 		let b = self.buckets.get_mut(&key).unwrap();
 		Ok(b)
+	}
+
+	/// Deletes an bucket.
+	///
+	/// Returns an error if
+	/// 1. the given key does not exist
+	/// 2. the key is for key / value data, not a bucket
+	/// 3. It is in a read-only transaction
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// use jammdb::{DB};
+	/// # use jammdb::Error;
+	///
+	/// # fn main() -> Result<(), Error> {
+	/// let mut db = DB::open("my.db")?;
+	/// let mut tx = db.tx(true)?;
+	///
+	/// // get a root-level bucket
+	/// let bucket = tx.get_bucket("my-bucket")?;
+	///
+	/// // delete nested bucket
+	/// bucket.delete_bucket("nested-bucket")?;
+	///
+	/// # Ok(())
+	/// # }
+	/// ```
+	pub fn delete_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<()> {
+		if !self.tx.writable {
+			return Err(Error::ReadOnlyTx);
+		}
+		// make sure the bucket is in our map
+		self.get_bucket(&name)?;
+		// remove the bucket from the map so it will be dropped at the end of this function
+		let b = self.buckets.remove(&Vec::from(name.as_ref())).unwrap();
+		let b = Pin::into_inner(b);
+		// check that the bucket wasn't just created and never comitted
+		let mut remaining_pages = Vec::new();
+		if b.meta.root_page != 0 {
+			// create a stack of pages to free and keep going until
+			// we've freed every reachable page starting from this bucket's root page
+			remaining_pages.push(b.meta.root_page);
+			while !remaining_pages.is_empty() {
+				let page_id = remaining_pages.pop().unwrap();
+				let page = self.tx.page(page_id);
+				let num_pages = page.overflow + 1;
+				match page.page_type {
+					// every branch element's page much be freed
+					Page::TYPE_BRANCH => {
+						page.branch_elements()
+							.iter()
+							.for_each(|b| remaining_pages.push(b.page));
+					}
+					Page::TYPE_LEAF => {
+						// every nested bucket's pages must be freed
+						page.leaf_elements().iter().for_each(|leaf| {
+							if leaf.node_type == Node::TYPE_BUCKET {
+								let bucket_data = BucketData::new(leaf.key(), leaf.value());
+								remaining_pages.push(bucket_data.meta().root_page);
+							}
+						});
+					}
+					_ => (),
+				}
+				self.tx.free(page_id, num_pages);
+			}
+		}
+		// delete the element from this bucket
+		let mut c = self.cursor();
+		let exists = c.seek(&name);
+		if exists {
+			let data = c.current().unwrap();
+			if !data.is_kv() {
+				self.dirty = true;
+				let node = self.node(c.current_id());
+				node.delete(c.current_index());
+				Ok(())
+			} else {
+				Err(Error::IncompatibleValue)
+			}
+		} else {
+			Err(Error::KeyValueMissing)
+		}
 	}
 
 	/// Returns the next integer for the bucket.

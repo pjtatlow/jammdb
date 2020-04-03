@@ -105,3 +105,34 @@ fn test_deletes(highest_int: u64) -> Result<(), Error> {
 		db.check()
 	}
 }
+
+#[test]
+fn delete_root_bucket() -> Result<(), Error> {
+	let random_file = common::RandomFile::new();
+	let mut db = DB::open(&random_file.path)?;
+	{
+		let mut tx = db.tx(true)?;
+		let b = tx.create_bucket("abc")?;
+		for i in 0..10_u64 {
+			b.put(i.to_be_bytes(), i.to_string())?;
+		}
+		tx.commit()?;
+	}
+	{
+		let mut tx = db.tx(true)?;
+		tx.delete_bucket("abc")?;
+		assert_eq!(tx.get_bucket("abc").err(), Some(Error::BucketMissing));
+		// delete a freshly created bucket
+		let b = tx.create_bucket("def")?;
+		b.put("some", "data")?;
+		tx.delete_bucket("def")?;
+
+		tx.commit()?;
+	}
+	{
+		let mut tx = db.tx(false)?;
+		assert_eq!(tx.get_bucket("abc").err(), Some(Error::BucketMissing));
+		assert_eq!(tx.get_bucket("def").err(), Some(Error::BucketMissing));
+	}
+	db.check()
+}

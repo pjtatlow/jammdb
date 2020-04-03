@@ -125,6 +125,17 @@ impl<'a> Transaction<'a> {
 		self.inner.create_bucket(name.as_ref())
 	}
 
+	/// Deletes an existing root-level bucket with the given name
+	///
+	/// # Errors
+	///
+	/// Will return a [`BucketMissing`](enum.Error.html#variant.BucketMissing) error if the bucket does not exist,
+	/// an [`IncompatibleValue`](enum.Error.html#variant.IncompatibleValue) error if the key exists but is not a bucket,
+	/// or a [`ReadOnlyTx`](enum.Error.html#variant.ReadOnlyTx) error if this is called on a read-only transaction.
+	pub fn delete_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<()> {
+		self.inner.delete_bucket(name.as_ref())
+	}
+
 	/// Writes the changes made in the writeable transaction to the underlying file.
 	///
 	/// # Errors
@@ -205,14 +216,19 @@ impl<'a> TransactionInner {
 		Page::from_buf(&self.data, id, self.db.pagesize)
 	}
 
-	pub(crate) fn get_bucket(&'a mut self, name: &[u8]) -> Result<&'a mut Bucket> {
+	fn get_bucket(&'a mut self, name: &[u8]) -> Result<&'a mut Bucket> {
 		let root = self.root.as_mut().unwrap();
 		root.get_bucket(name)
 	}
 
-	pub(crate) fn create_bucket(&'a mut self, name: &[u8]) -> Result<&'a mut Bucket> {
+	fn create_bucket(&'a mut self, name: &[u8]) -> Result<&'a mut Bucket> {
 		let root = self.root.as_mut().unwrap();
 		root.create_bucket(name)
+	}
+
+	fn delete_bucket(&mut self, name: &[u8]) -> Result<()> {
+		let root = self.root.as_mut().unwrap();
+		root.delete_bucket(name)
 	}
 
 	pub(crate) fn copy_data(&mut self, data: &[u8]) -> SliceParts {
