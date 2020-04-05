@@ -336,24 +336,9 @@ impl<'a> TransactionInner {
 	fn check(&self) -> Result<()> {
 		use std::collections::HashSet;
 		let mut unused_pages: HashSet<usize> = (2..=self.meta.num_pages).collect();
-		if !unused_pages.remove(&self.meta.freelist_page) {
-			#[cfg_attr(tarpaulin, skip)]
-			return Err(Error::InvalidDB(format!(
-				"Freelist Page {} missing from unused_pages",
-				self.meta.freelist_page,
-			)));
-		}
-		for page_id in self.freelist.pages() {
-			if !unused_pages.remove(&page_id) {
-				#[cfg_attr(tarpaulin, skip)]
-				return Err(Error::InvalidDB(format!(
-					"Page {} from freelist missing from unused_pages",
-					page_id,
-				)));
-			}
-		}
 		let mut page_stack = Vec::new();
 		page_stack.push(self.meta.root.root_page);
+		page_stack.push(self.meta.freelist_page);
 		while !page_stack.is_empty() {
 			let page_id = page_stack.pop().unwrap();
 			if !unused_pages.remove(&page_id) {
@@ -364,6 +349,16 @@ impl<'a> TransactionInner {
 				)));
 			}
 			let page = self.page(page_id);
+			for i in 0..page.overflow {
+				let page_id = page_id + i + 1;
+				if !unused_pages.remove(&page_id) {
+					#[cfg_attr(tarpaulin, skip)]
+					return Err(Error::InvalidDB(format!(
+						"Overflow Page {} from missing from unused_pages",
+						page_id,
+					)));
+				}
+			}
 			match page.page_type {
 				Page::TYPE_BRANCH => {
 					let mut last: Option<&[u8]> = None;
@@ -405,6 +400,23 @@ impl<'a> TransactionInner {
 							)));
 						}
 						last = Some(leaf.key());
+					}
+				}
+				Page::TYPE_FREELIST => {
+					if page_id != self.meta.freelist_page {
+						return Err(Error::InvalidDB(format!(
+							"Found Invalid Freelist Page {}",
+							page_id
+						)));
+					}
+					for page_id in page.freelist() {
+						if !unused_pages.remove(&page_id) {
+							#[cfg_attr(tarpaulin, skip)]
+							return Err(Error::InvalidDB(format!(
+								"Page {} from freelist missing from unused_pages",
+								page_id,
+							)));
+						}
 					}
 				}
 				_ =>
