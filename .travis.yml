@@ -4,13 +4,13 @@
 dist: trusty
 language: rust
 services: docker
-sudo: required
+os: linux
 
 env:
   global:
     - CRATE_NAME=jammdb
 
-matrix:
+jobs:
   include:
     # Android
     - env: TARGET=aarch64-linux-android DISABLE_TESTS=1
@@ -24,10 +24,13 @@ matrix:
       os: osx
     - env: TARGET=armv7-apple-ios DISABLE_TESTS=1
       os: osx
+      rust: 1.41.0
     - env: TARGET=armv7s-apple-ios DISABLE_TESTS=1
       os: osx
+      rust: 1.41.0
     - env: TARGET=i386-apple-ios DISABLE_TESTS=1
       os: osx
+      rust: 1.41.0
     - env: TARGET=x86_64-apple-ios DISABLE_TESTS=1
       os: osx
 
@@ -51,6 +54,7 @@ matrix:
     # OSX
     - env: TARGET=i686-apple-darwin
       os: osx
+      rust: 1.41.0
     - env: TARGET=x86_64-apple-darwin
       os: osx
 
