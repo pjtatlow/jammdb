@@ -14,18 +14,18 @@ use crate::errors::Result;
 use crate::page::{BranchElement, LeafElement, Page, PageID, PageType};
 use crate::ptr::Ptr;
 
-pub(crate) type NodeID = usize;
+pub(crate) type NodeID = u64;
 
-const HEADER_SIZE: usize = size_of::<Page>();
-const LEAF_SIZE: usize = size_of::<LeafElement>();
-const BRANCH_SIZE: usize = size_of::<BranchElement>();
+const HEADER_SIZE: u64 = size_of::<Page>() as u64;
+const LEAF_SIZE: u64 = size_of::<LeafElement>() as u64;
+const BRANCH_SIZE: u64 = size_of::<BranchElement>() as u64;
 const MIN_KEYS_PER_NODE: usize = 2;
 const FILL_PERCENT: f32 = 0.5;
 
 pub(crate) struct Node {
 	pub(crate) id: NodeID,
 	pub(crate) page_id: PageID,
-	pub(crate) num_pages: usize,
+	pub(crate) num_pages: u64,
 	bucket: Ptr<Bucket>,
 	// pub (crate) key: SliceParts,
 	pub(crate) children: Vec<NodeID>,
@@ -47,12 +47,14 @@ impl NodeData {
 		}
 	}
 
-	fn size(&self) -> usize {
+	fn size(&self) -> u64 {
 		match self {
 			NodeData::Branches(b) => b
 				.iter()
-				.fold(BRANCH_SIZE * b.len(), |acc, b| acc + b.key_size()),
-			NodeData::Leaves(l) => l.iter().fold(LEAF_SIZE * l.len(), |acc, l| acc + l.size()),
+				.fold(BRANCH_SIZE * b.len() as u64, |acc, b| acc + b.key_size()),
+			NodeData::Leaves(l) => l
+				.iter()
+				.fold(LEAF_SIZE * l.len() as u64, |acc, l| acc + l.size()),
 		}
 	}
 
@@ -104,7 +106,7 @@ impl Branch {
 		self.key.slice()
 	}
 
-	pub(crate) fn key_size(&self) -> usize {
+	pub(crate) fn key_size(&self) -> u64 {
 		self.key.size()
 	}
 }
@@ -225,7 +227,7 @@ impl Node {
 		}
 	}
 
-	fn size(&self) -> usize {
+	fn size(&self) -> u64 {
 		HEADER_SIZE + self.data.size()
 	}
 
@@ -234,7 +236,7 @@ impl Node {
 			return Ok(());
 		}
 		let size = self.size();
-		let mut buf: Vec<u8> = vec![0; size];
+		let mut buf: Vec<u8> = vec![0; size as usize];
 		#[allow(clippy::cast_ptr_alignment)]
 		let page = unsafe { &mut *(&mut buf[0] as *mut u8 as *mut Page) };
 		page.write_node(self, self.num_pages)?;
@@ -341,7 +343,7 @@ impl Node {
 			self.allocate();
 			return None;
 		}
-		let threshold = ((self.bucket.tx.db.pagesize as f32) * FILL_PERCENT) as usize;
+		let threshold = ((self.bucket.tx.db.pagesize as f32) * FILL_PERCENT) as u64;
 		let mut split_indexes = Vec::<usize>::new();
 		let mut current_size = HEADER_SIZE;
 		let mut count = 0;

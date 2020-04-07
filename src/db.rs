@@ -45,13 +45,13 @@ const DEFAULT_NUM_PAGES: usize = 32;
 /// # }
 /// ```
 pub struct OpenOptions {
-	pagesize: usize,
+	pagesize: u64,
 	num_pages: usize,
 }
 
 impl Default for OpenOptions {
 	fn default() -> Self {
-		let pagesize = getPageSize();
+		let pagesize = getPageSize() as u64;
 		if pagesize < 1024 {
 			panic!("Pagesize must be 1024 bytes minimum");
 		}
@@ -76,7 +76,7 @@ impl OpenOptions {
 	///
 	/// # Panics
 	/// Will panic if you try to set the pagesize < 1024 bytes.
-	pub fn pagesize(mut self, pagesize: usize) -> Self {
+	pub fn pagesize(mut self, pagesize: u64) -> Self {
 		if pagesize < 1024 {
 			panic!("Pagesize must be 1024 bytes minimum");
 		}
@@ -167,7 +167,7 @@ impl DB {
 	}
 
 	/// Returns the database's pagesize.
-	pub fn pagesize(&self) -> usize {
+	pub fn pagesize(&self) -> u64 {
 		self.0.pagesize
 	}
 
@@ -186,11 +186,11 @@ pub(crate) struct DBInner {
 	pub(crate) mmap_lock: Mutex<()>,
 	pub(crate) open_ro_txs: Mutex<Vec<u64>>,
 
-	pub(crate) pagesize: usize,
+	pub(crate) pagesize: u64,
 }
 
 impl DBInner {
-	pub(crate) fn open(file: File, pagesize: usize) -> Result<DBInner> {
+	pub(crate) fn open(file: File, pagesize: u64) -> Result<DBInner> {
 		file.lock_exclusive()?;
 
 		let mmap = unsafe { Arc::new(Mmap::map(&file)?) };
@@ -207,7 +207,7 @@ impl DBInner {
 		};
 
 		let meta = db.meta();
-		let free_pages = Page::from_buf(&db.data, meta.freelist_page, pagesize as usize).freelist();
+		let free_pages = Page::from_buf(&db.data, meta.freelist_page, pagesize).freelist();
 
 		if !free_pages.is_empty() {
 			db.freelist.init(free_pages);
@@ -230,12 +230,12 @@ impl DBInner {
 		match (meta1.valid(), meta2.valid()) {
 			(true, true) => {
 				assert_eq!(
-					meta1.pagesize as usize, self.pagesize,
+					meta1.pagesize as u64, self.pagesize,
 					"Invalid pagesize from meta1 {}. Expected {}.",
 					meta1.pagesize, self.pagesize
 				);
 				assert_eq!(
-					meta2.pagesize as usize, self.pagesize,
+					meta2.pagesize as u64, self.pagesize,
 					"Invalid pagesize from meta2 {}. Expected {}.",
 					meta2.pagesize, self.pagesize
 				);
@@ -247,7 +247,7 @@ impl DBInner {
 			}
 			(true, false) => {
 				assert_eq!(
-					meta1.pagesize as usize, self.pagesize,
+					meta1.pagesize as u64, self.pagesize,
 					"Invalid pagesize from meta1 {}. Expected {}.",
 					meta1.pagesize, self.pagesize
 				);
@@ -255,7 +255,7 @@ impl DBInner {
 			}
 			(false, true) => {
 				assert_eq!(
-					meta2.pagesize as usize, self.pagesize,
+					meta2.pagesize as u64, self.pagesize,
 					"Invalid pagesize from meta2 {}. Expected {}.",
 					meta2.pagesize, self.pagesize
 				);
@@ -267,18 +267,18 @@ impl DBInner {
 	}
 }
 
-fn init_file(path: &Path, pagesize: usize, num_pages: usize) -> Result<File> {
+fn init_file(path: &Path, pagesize: u64, num_pages: usize) -> Result<File> {
 	let mut file = FileOpenOptions::new()
 		.create(true)
 		.read(true)
 		.write(true)
 		.open(path)?;
-	file.allocate((pagesize * num_pages) as u64)?;
-	let mut buf = vec![0; pagesize * 4];
-	let mut get_page = |index: usize| {
+	file.allocate(pagesize * (num_pages as u64))?;
+	let mut buf = vec![0; (pagesize * 4) as usize];
+	let mut get_page = |index: u64| {
 		#[allow(clippy::cast_ptr_alignment)]
 		unsafe {
-			&mut *(&mut buf[index * pagesize] as *mut u8 as *mut Page)
+			&mut *(&mut buf[(index * pagesize) as usize] as *mut u8 as *mut Page)
 		}
 	};
 	for i in 0..2 {

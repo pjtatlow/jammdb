@@ -212,7 +212,7 @@ impl<'a> TransactionInner {
 	}
 
 	#[inline]
-	pub(crate) fn page(&self, id: usize) -> &Page {
+	pub(crate) fn page(&self, id: u64) -> &Page {
 		Page::from_buf(&self.data, id, self.db.pagesize)
 	}
 
@@ -237,19 +237,19 @@ impl<'a> TransactionInner {
 		SliceParts::from_slice(&self.buffers.last().unwrap()[..])
 	}
 
-	pub(crate) fn free(&mut self, page_id: PageID, num_pages: usize) {
+	pub(crate) fn free(&mut self, page_id: PageID, num_pages: u64) {
 		for id in page_id..(page_id + num_pages) {
 			self.freelist.free(self.meta.tx_id, id);
 		}
 	}
 
-	pub(crate) fn allocate(&mut self, bytes: usize) -> (PageID, usize) {
+	pub(crate) fn allocate(&mut self, bytes: u64) -> (PageID, u64) {
 		let num_pages = if (bytes % self.db.pagesize) == 0 {
 			bytes / self.db.pagesize
 		} else {
 			(bytes / self.db.pagesize) + 1
 		};
-		let page_id = match self.freelist.allocate(num_pages) {
+		let page_id = match self.freelist.allocate(num_pages as usize) {
 			Some(page_id) => page_id,
 			None => {
 				let page_id = self.meta.num_pages + 1;
@@ -289,14 +289,14 @@ impl<'a> TransactionInner {
 			let page_ids = self.freelist.pages();
 			let size = self.freelist.size();
 
-			let mut buf = vec![0; size];
+			let mut buf = vec![0; size as usize];
 
 			#[allow(clippy::cast_ptr_alignment)]
 			let mut page = unsafe { &mut *(&mut buf[0] as *mut u8 as *mut Page) };
 			page.id = page_id;
 			page.overflow = num_pages - 1;
 			page.page_type = Page::TYPE_FREELIST;
-			page.count = page_ids.len();
+			page.count = page_ids.len() as u64;
 			page.freelist_mut().copy_from_slice(page_ids.as_slice());
 
 			file.write_all_at(buf.as_slice(), (self.db.pagesize * page_id) as u64)?;
@@ -306,7 +306,7 @@ impl<'a> TransactionInner {
 
 		// write meta page to file
 		{
-			let mut buf = vec![0; self.db.pagesize];
+			let mut buf = vec![0; self.db.pagesize as usize];
 
 			#[allow(clippy::cast_ptr_alignment)]
 			let mut page = unsafe { &mut *(&mut buf[0] as *mut u8 as *mut Page) };
@@ -335,7 +335,7 @@ impl<'a> TransactionInner {
 
 	fn check(&self) -> Result<()> {
 		use std::collections::HashSet;
-		let mut unused_pages: HashSet<usize> = (2..=self.meta.num_pages).collect();
+		let mut unused_pages: HashSet<PageID> = (2..=self.meta.num_pages).collect();
 		let mut page_stack = Vec::new();
 		page_stack.push(self.meta.root.root_page);
 		page_stack.push(self.meta.freelist_page);
@@ -580,7 +580,7 @@ mod tests {
 		let mut tx = tx.inner;
 
 		// setup the freelist and num_pages to simulate a used database
-		for page in [10_usize, 11, 13, 14, 15].iter() {
+		for page in [10_u64, 11, 13, 14, 15].iter() {
 			tx.freelist.free(0, *page);
 		}
 		tx.freelist.release(1);

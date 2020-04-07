@@ -9,8 +9,8 @@ pub(crate) struct Freelist {
 	pending_pages: BTreeMap<u64, Vec<PageID>>,
 }
 
-const HEADER_SIZE: usize = size_of::<Page>();
-const PAGE_ID_SIZE: usize = size_of::<PageID>();
+const HEADER_SIZE: u64 = size_of::<Page>() as u64;
+const PAGE_ID_SIZE: u64 = size_of::<PageID>() as u64;
 
 impl Freelist {
 	pub(crate) fn new() -> Freelist {
@@ -63,7 +63,7 @@ impl Freelist {
 			}
 
 			let block_size = id - start + 1;
-			if block_size == num_pages {
+			if block_size == (num_pages as u64) {
 				found = start;
 				break;
 			}
@@ -72,7 +72,7 @@ impl Freelist {
 		}
 
 		if found > 0 {
-			for id in found..found + num_pages {
+			for id in found..found + (num_pages as u64) {
 				self.free_pages.remove(&id);
 			}
 			return Some(found);
@@ -91,8 +91,8 @@ impl Freelist {
 		page_ids
 	}
 
-	pub(crate) fn size(&self) -> usize {
-		let count = self.pages().len();
+	pub(crate) fn size(&self) -> u64 {
+		let count = self.pages().len() as u64;
 		HEADER_SIZE + (PAGE_ID_SIZE * count)
 	}
 }
@@ -116,22 +116,22 @@ mod tests {
 		assert_eq!(freelist.allocate(4), None);
 		assert_eq!(freelist.allocate(1), Some(2));
 		assert_eq!(
-			freelist.free_pages.iter().cloned().collect::<Vec<usize>>(),
+			freelist.free_pages.iter().cloned().collect::<Vec<u64>>(),
 			vec![4, 6, 8, 9, 10]
 		);
 		assert_eq!(freelist.allocate(1), Some(4));
 		assert_eq!(
-			freelist.free_pages.iter().cloned().collect::<Vec<usize>>(),
+			freelist.free_pages.iter().cloned().collect::<Vec<u64>>(),
 			vec![6, 8, 9, 10]
 		);
 		assert_eq!(freelist.allocate(3), Some(8));
 		assert_eq!(
-			freelist.free_pages.iter().cloned().collect::<Vec<usize>>(),
+			freelist.free_pages.iter().cloned().collect::<Vec<u64>>(),
 			vec![6]
 		);
 		assert_eq!(freelist.allocate(1), Some(6));
 		assert_eq!(
-			freelist.free_pages.iter().cloned().collect::<Vec<usize>>(),
+			freelist.free_pages.iter().cloned().collect::<Vec<u64>>(),
 			vec![]
 		);
 		assert_eq!(freelist.allocate(1), None);

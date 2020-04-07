@@ -76,7 +76,7 @@ impl Data {
 		}
 	}
 
-	pub(crate) fn size(&self) -> usize {
+	pub(crate) fn size(&self) -> u64 {
 		match self {
 			Data::Bucket(b) => b.size(),
 			Data::KeyValue(kv) => kv.size(),
@@ -156,7 +156,7 @@ impl BucketData {
 		}
 	}
 
-	pub(crate) fn size(&self) -> usize {
+	pub(crate) fn size(&self) -> u64 {
 		self.name.size() + self.meta.size()
 	}
 }
@@ -209,7 +209,7 @@ impl KVPair {
 		KVPair { key, value }
 	}
 
-	pub(crate) fn size(&self) -> usize {
+	pub(crate) fn size(&self) -> u64 {
 		self.key.size() + self.value.size()
 	}
 
@@ -227,13 +227,13 @@ impl KVPair {
 #[derive(Clone, Copy)]
 pub(crate) struct SliceParts {
 	ptr: *const u8,
-	len: usize,
+	len: u64,
 }
 
 impl SliceParts {
 	pub(crate) fn from_slice(s: &[u8]) -> SliceParts {
 		let ptr;
-		let len = s.len();
+		let len = s.len() as u64;
 		if len > 0 {
 			ptr = &s[0] as *const u8;
 		} else {
@@ -243,10 +243,10 @@ impl SliceParts {
 	}
 
 	pub(crate) fn slice(&self) -> &[u8] {
-		unsafe { std::slice::from_raw_parts(self.ptr, self.len) }
+		unsafe { std::slice::from_raw_parts(self.ptr, self.len as usize) }
 	}
 
-	pub(crate) fn size(&self) -> usize {
+	pub(crate) fn size(&self) -> u64 {
 		self.len
 	}
 }
@@ -355,7 +355,7 @@ mod tests {
 		assert_eq!(b.name(), name);
 		assert_eq!(b.meta().root_page, meta.root_page);
 		assert_eq!(b.meta().next_int, meta.next_int);
-		assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta));
+		assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta) as u64);
 
 		meta.next_int += 1;
 		assert_eq!(b.meta().next_int, meta.next_int);
@@ -367,7 +367,7 @@ mod tests {
 		assert_eq!(b.name(), name);
 		assert_eq!(b.meta().root_page, meta.root_page);
 		assert_eq!(b.meta().next_int, meta.next_int);
-		assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta));
+		assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta) as u64);
 
 		meta.next_int += 1;
 		assert_eq!(b.meta().next_int, meta.next_int);
@@ -376,7 +376,7 @@ mod tests {
 		assert_eq!(b.name(), name);
 		assert_eq!(b.meta().root_page, meta.root_page);
 		assert_eq!(b.meta().next_int, meta.next_int);
-		assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta));
+		assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta) as u64);
 
 		meta.next_int += 1;
 		assert_eq!(b.meta().next_int, meta.next_int);
@@ -405,6 +405,6 @@ mod tests {
 		assert_eq!(data.key_parts(), SliceParts::from_slice(&k));
 		assert_eq!(data.key(), &k[..]);
 		assert_eq!(data.value(), meta.as_ref());
-		assert_eq!(data.size(), 8 + std::mem::size_of_val(&meta));
+		assert_eq!(data.size(), 8 + std::mem::size_of_val(&meta) as u64);
 	}
 }

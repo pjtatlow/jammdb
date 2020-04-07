@@ -104,10 +104,10 @@ impl Bucket {
 	}
 
 	pub(crate) fn new_node(&mut self, data: NodeData) -> &mut Node {
-		let node_id = self.nodes.len();
+		let node_id = self.nodes.len() as u64;
 		let n = Node::with_data(node_id, data, Ptr::new(self));
 		self.nodes.push(Pin::new(Box::new(n)));
-		self.nodes.get_mut(node_id).unwrap()
+		self.nodes.get_mut(node_id as usize).unwrap()
 	}
 
 	fn from_meta(&self, meta: BucketMeta) -> Bucket {
@@ -503,7 +503,7 @@ impl Bucket {
 
 	pub(crate) fn page_node(&self, page: PageID) -> PageNode {
 		if let Some(node_id) = self.page_node_ids.get(&page) {
-			PageNode::Node(Ptr::new(self.nodes.get(*node_id).unwrap()))
+			PageNode::Node(Ptr::new(self.nodes.get(*node_id as usize).unwrap()))
 		} else {
 			PageNode::Page(Ptr::new(self.tx.page(page)))
 		}
@@ -523,12 +523,12 @@ impl Bucket {
 				debug_assert!(
 					self.meta.root_page == page_id || self.page_parents.contains_key(&page_id)
 				);
-				let node_id = self.nodes.len();
+				let node_id = self.nodes.len() as u64;
 				self.page_node_ids.insert(page_id, node_id);
 				let n: Node = Node::from_page(node_id, Ptr::new(self), self.tx.page(page_id));
 				self.nodes.push(Pin::new(Box::new(n)));
 				if self.meta.root_page != page_id {
-					let node_key = self.nodes[node_id].data.key_parts();
+					let node_key = self.nodes[node_id as usize].data.key_parts();
 					let parent = self.node(PageNodeID::Page(self.page_parents[&page_id]));
 					parent.insert_child(node_id, node_key);
 				}
@@ -536,7 +536,7 @@ impl Bucket {
 			}
 			PageNodeID::Node(id) => id,
 		};
-		self.nodes.get_mut(id).unwrap()
+		self.nodes.get_mut(id as usize).unwrap()
 	}
 
 	pub(crate) fn rebalance(&mut self) -> Result<BucketMeta> {
