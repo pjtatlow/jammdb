@@ -1,13 +1,7 @@
 use std::fs::File;
-use std::io::Write;
+use std::io::{Seek, SeekFrom, Write};
 use std::pin::Pin;
 use std::sync::{Arc, MutexGuard};
-
-#[cfg(unix)]
-use std::os::unix::fs::FileExt;
-
-#[cfg(windows)]
-use std::os::windows::fs::FileExt;
 
 use memmap::Mmap;
 
@@ -299,7 +293,8 @@ impl<'a> TransactionInner {
 			page.count = page_ids.len() as u64;
 			page.freelist_mut().copy_from_slice(page_ids.as_slice());
 
-			file.write_all_at(buf.as_slice(), (self.db.pagesize * page_id) as u64)?;
+			file.seek(SeekFrom::Start((self.db.pagesize * page_id) as u64))?;
+			file.write_all(buf.as_slice())?;
 
 			self.meta.freelist_page = page_id;
 		}
@@ -323,7 +318,9 @@ impl<'a> TransactionInner {
 			m.freelist_page = self.meta.freelist_page;
 			m.tx_id = self.meta.tx_id;
 			m.hash = m.hash_self();
-			file.write_all_at(buf.as_slice(), (self.db.pagesize * meta_page_id) as u64)?;
+
+			file.seek(SeekFrom::Start((self.db.pagesize * meta_page_id) as u64))?;
+			file.write_all(buf.as_slice())?;
 		}
 
 		file.flush()?;

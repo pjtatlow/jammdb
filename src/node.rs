@@ -1,11 +1,6 @@
 use std::fs::File;
+use std::io::{Seek, SeekFrom, Write};
 use std::mem::size_of;
-
-#[cfg(unix)]
-use std::os::unix::fs::FileExt;
-
-#[cfg(windows)]
-use std::os::windows::fs::FileExt;
 
 use crate::bucket::Bucket;
 use crate::cursor::PageNodeID;
@@ -241,8 +236,8 @@ impl Node {
 		let page = unsafe { &mut *(&mut buf[0] as *mut u8 as *mut Page) };
 		page.write_node(self, self.num_pages)?;
 		let offset = (self.page_id as u64) * (self.bucket.tx.meta.pagesize as u64);
-		// println!("WRITING PAGE: {:?} at {}", page, offset);
-		file.write_all_at(buf.as_slice(), offset)?;
+		file.seek(SeekFrom::Start(offset))?;
+		file.write_all(buf.as_slice())?;
 		Ok(())
 	}
 
