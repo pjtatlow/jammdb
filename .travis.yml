@@ -22,15 +22,6 @@ jobs:
     # iOS
     - env: TARGET=aarch64-apple-ios DISABLE_TESTS=1
       os: osx
-    - env: TARGET=armv7-apple-ios DISABLE_TESTS=1
-      os: osx
-      rust: 1.41.0
-    - env: TARGET=armv7s-apple-ios DISABLE_TESTS=1
-      os: osx
-      rust: 1.41.0
-    - env: TARGET=i386-apple-ios DISABLE_TESTS=1
-      os: osx
-      rust: 1.41.0
     - env: TARGET=x86_64-apple-ios DISABLE_TESTS=1
       os: osx
 
@@ -52,9 +43,6 @@ jobs:
     - env: TARGET=x86_64-unknown-linux-musl
 
     # OSX
-    - env: TARGET=i686-apple-darwin
-      os: osx
-      rust: 1.41.0
     - env: TARGET=x86_64-apple-darwin
       os: osx
 

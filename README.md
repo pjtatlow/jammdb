@@ -26,12 +26,11 @@ with multiple lock-free readers and a single concurrent writer. The data is orga
 so random and sequential reads are very fast. The underlying file is memory mapped, so reads require no additional memory allocation.
 
 ## Supported platforms
-`jammdb` is continuously cross-compiled on all of the following platforms, and tested against _most_ of them.
+`jammdb` is continuously cross-compiled and tested on the following platforms:
   * `x86_64-unknown-linux-gnu` (Linux)
   * `i686-unknown-linux-gnu`
   * `x86_64-unknown-linux-musl` (Linux MUSL)
   * `x86_64-apple-darwin` (OSX)
-  * `i686-apple-darwin`
   * `x86_64-pc-windows-msvc` (Windows)
   * `i686-pc-windows-msvc`
   * `x86_64-pc-windows-gnu`
@@ -41,7 +40,6 @@ so random and sequential reads are very fast. The underlying file is memory mapp
   * `arm-unknown-linux-gnueabihf`
   * `mips-unknown-linux-gnu` (MIPS)
   * `x86_64-apple-ios` (iOS)
-  * `i686-apple-ios`
 
 ## Examples
 
