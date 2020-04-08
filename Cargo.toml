@@ -10,6 +10,14 @@ readme = "README.md"
 keywords = ["db", "database", "embedded-database", "memory map"]
 categories = ["database", "database-implementations"]
 
+exclude = [
+    ".*.yml",
+    ".github/*",
+    "ci/*",
+    "tests/*",
+    "makefile",
+]
+
 [dependencies]
 memmap = "0.7.0"
 page_size = "0.4.2"
@@ -22,5 +30,7 @@ rmp-serde = "0.14"
 serde = { version = "1.0", features = ["derive"] }
 
 [badges]
-codecov = { repository = "pjtatlow/jammdb", branch = "master", service = "github" }
-maintenance = { status = "experimental" }
+codecov = { repository = "pjtatlow/jammdb" }
+travis-ci = { repository = "pjtatlow/jammdb" }
+appveyor = { repository = "pjtatlow/jammdb" }
+maintenance = { status = "actively-developed" }
