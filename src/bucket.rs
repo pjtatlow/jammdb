@@ -18,8 +18,7 @@ use crate::transaction::TransactionInner;
 /// as well as [`get`](#method.get_bucket) and [`create`](#method.create_bucket)
 /// nested buckets.
 ///
-/// You can use a [`Cursor`] to iterate over
-/// all the data in a bucket.
+/// You can use a [`Cursor`] to iterate over all the data in a bucket.
 ///
 /// Buckets have an inner auto-incremented counter that keeps track
 /// of how many unique keys have been inserted into the bucket.

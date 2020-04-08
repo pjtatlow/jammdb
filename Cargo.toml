@@ -18,6 +18,8 @@ sha3 = "0.8"
 
 [dev-dependencies]
 rand = "0.7"
+rmp-serde = "0.14"
+serde = { version = "1.0", features = ["derive"] }
 
 [badges]
 codecov = { repository = "pjtatlow/jammdb", branch = "master", service = "github" }

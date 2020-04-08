@@ -1,4 +1,4 @@
-.PHONEY: coverage, readme
+.PHONEY: coverage, test-32-bit, docs, docs-open
 
 coverage:
 	CARGO_INCREMENTAL=0 \
@@ -13,13 +13,9 @@ coverage:
 
 docs:
 	cargo +nightly doc
+
 docs-open:
 	cargo +nightly doc --open
-
-readme: README.md
-
-README.md: src/lib.rs Cargo.toml
-	cargo readme > README.md
 
 test-32-bit:
 	docker run --rm -v "$(PWD)":/usr/src/myapp -w /usr/src/myapp i386/rust:1.42.0 cargo test

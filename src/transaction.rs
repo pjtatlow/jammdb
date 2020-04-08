@@ -24,12 +24,14 @@ use crate::ptr::Ptr;
 /// Transactions are completely isolated from each other, so a read-only transaction can expect the data to stay exactly the same for the life
 /// of the transaction, regardless of how many changes are made in other transactions<sup>2</sup>.
 ///
-/// There are three important methods. Check out their documentation for more details:
-/// 1. [`create_bucket`](#method.create_bucket) makes new buckets at the root level. Available in writable transactions.
-/// 2. [`get_bucket`](#method.get_bucket) retreives buckets from the root level. Available in read-only or writable transactions.
-/// 3. [`commit`](#method.commit) saves a writable transaction. Available in writable transactions.
+/// There are four important methods. Check out their documentation for more details:
+/// 1. [`get_bucket`](#method.get_bucket) retreives buckets from the root level. Available in read-only or writable transactions.
+/// 2. [`create_bucket`](#method.create_bucket) makes new buckets at the root level. Available in writable transactions only.
+/// 3. [`detete_bucket`](#method.delete_bucket) deletes a bucket (including all nested buckets) from the database. Available in writable transactions only.
+/// 4. [`commit`](#method.commit) saves a writable transaction. Available in writable transactions.
 ///
-/// Trying to use the methods that require writable transactions from a read-only transaction will result in an error.
+/// Trying to use the methods that require writable transactions from a read-only transaction will result in an error. If you make edits in a writable transaction,
+/// and you want to save them, you must call the [`commit`](#method.commit) method, otherwise when the transaction is dropped all your changes will be lost.
 ///
 /// # Examples
 ///
