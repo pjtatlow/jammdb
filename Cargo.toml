@@ -7,7 +7,7 @@ edition = "2018"
 license = "MIT"
 repository = "https://github.com/pjtatlow/jammdb"
 readme = "README.md"
-keywords = ["db", "database", "embedded-database", "memory map"]
+keywords = ["db", "database", "embedded-database", "memory-map"]
 categories = ["database", "database-implementations"]
 
 exclude = [
