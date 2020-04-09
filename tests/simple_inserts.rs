@@ -38,7 +38,8 @@ fn test_insert(mut values: Vec<u64>) -> Result<(), Error> {
 			// insert data in a random order
 			values.shuffle(&mut rng);
 			for i in values.iter() {
-				b.put(i.to_be_bytes(), i.to_string())?;
+				let existing = b.put(i.to_be_bytes(), i.to_string())?;
+				assert!(existing.is_none());
 			}
 			// check before commit
 			check_data(&b, values.len() as u64, 1);

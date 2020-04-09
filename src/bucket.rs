@@ -460,14 +460,23 @@ impl Bucket {
 	/// # Ok(())
 	/// # }
 	/// ```
-	pub fn put<T: AsRef<[u8]>, S: AsRef<[u8]>>(&mut self, key: T, value: S) -> Result<()> {
+	pub fn put<T: AsRef<[u8]>, S: AsRef<[u8]>>(
+		&mut self,
+		key: T,
+		value: S,
+	) -> Result<Option<KVPair>> {
 		if !self.tx.writable {
 			return Err(Error::ReadOnlyTx);
 		}
 		let k = self.tx.copy_data(key.as_ref());
 		let v = self.tx.copy_data(value.as_ref());
-		self.put_data(Data::KeyValue(KVPair::from_slice_parts(k, v)))?;
-		Ok(())
+		match self.put_data(Data::KeyValue(KVPair::from_slice_parts(k, v)))? {
+			Some(data) => match data {
+				Data::KeyValue(kv) => Ok(Some(kv)),
+				_ => panic!("Unexpected data"),
+			},
+			None => Ok(None),
+		}
 	}
 
 	/// Deletes a key / value pair from the bucket
@@ -493,7 +502,7 @@ impl Bucket {
 	/// # Ok(())
 	/// # }
 	/// ```
-	pub fn delete<T: AsRef<[u8]>>(&mut self, key: T) -> Result<Data> {
+	pub fn delete<T: AsRef<[u8]>>(&mut self, key: T) -> Result<KVPair> {
 		if !self.tx.writable {
 			return Err(Error::ReadOnlyTx);
 		}
@@ -504,7 +513,10 @@ impl Bucket {
 			if data.is_kv() {
 				self.dirty = true;
 				let node = self.node(c.current_id());
-				Ok(node.delete(c.current_index()))
+				match node.delete(c.current_index()) {
+					Data::KeyValue(kv) => Ok(kv),
+					_ => panic!("Unexpected data"),
+				}
 			} else {
 				Err(Error::IncompatibleValue)
 			}
@@ -513,21 +525,23 @@ impl Bucket {
 		}
 	}
 
-	fn put_data(&mut self, data: Data) -> Result<()> {
+	fn put_data(&mut self, data: Data) -> Result<Option<Data>> {
 		let mut c = self.cursor();
 		let exists = c.seek(data.key());
-		if exists {
+		let current_data = if exists {
 			let current = c.current().unwrap();
 			if current.is_kv() != data.is_kv() {
 				return Err(Error::IncompatibleValue);
 			}
+			Some(current)
 		} else {
 			self.meta.next_int += 1;
-		}
+			None
+		};
 		let node = self.node(c.current_id());
 		node.insert_data(data);
 		self.dirty = true;
-		Ok(())
+		Ok(current_data)
 	}
 
 	/// Get a cursor to iterate over the bucket.

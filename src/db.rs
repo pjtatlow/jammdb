@@ -295,7 +295,7 @@ fn init_file(path: &Path, pagesize: u64, num_pages: usize) -> Result<File> {
 			root_page: 3,
 			next_int: 0,
 		};
-		m.num_pages = 3;
+		m.num_pages = 4;
 		m.hash = m.hash_self();
 	}
 

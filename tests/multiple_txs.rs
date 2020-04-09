@@ -14,7 +14,7 @@ fn tx_isolation() -> Result<(), Error> {
 
 		for i in 0..=10_u64 {
 			assert_eq!(b.next_int(), i);
-			b.put(i.to_be_bytes(), i.to_string())?;
+			assert!((b.put(i.to_be_bytes(), i.to_string())?).is_none());
 		}
 		assert_eq!(b.next_int(), 11);
 
@@ -38,13 +38,19 @@ fn tx_isolation() -> Result<(), Error> {
 		assert_eq!(ro_b.next_int(), 11);
 		assert_eq!(rw_b.next_int(), 11);
 		for i in 0..=100_u64 {
+			let next_int = rw_b.next_int();
+			let existing_data = rw_b.put(i.to_be_bytes(), i.to_string().repeat(4))?;
 			if i < 11 {
-				assert_eq!(rw_b.next_int(), 11);
+				assert_eq!(next_int, 11);
+				assert!(existing_data.is_some());
+				let kv = existing_data.unwrap();
+				assert_eq!(kv.key(), i.to_be_bytes());
+				assert_eq!(kv.value(), i.to_string().as_bytes());
 			} else {
-				assert_eq!(rw_b.next_int(), i);
+				assert_eq!(next_int, i);
+				assert!(existing_data.is_none());
 			}
 			assert_eq!(ro_b.next_int(), 11);
-			rw_b.put(i.to_be_bytes(), i.to_string().repeat(4))?;
 		}
 		assert_eq!(rw_b.next_int(), 101);
 		check_data(rw_b, 101, 4);
