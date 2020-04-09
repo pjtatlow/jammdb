@@ -55,13 +55,9 @@ fn test_deletes(highest_int: u64) -> Result<(), Error> {
 					}
 					let i = i.unwrap();
 					if deleted.insert(i) {
-						match b.delete(i.to_be_bytes())? {
-							Data::KeyValue(kv) => {
-								assert_eq!(kv.key(), i.to_be_bytes());
-								assert_eq!(kv.value(), i.to_string().as_bytes());
-							}
-							Data::Bucket(_) => panic!("Expected Data::KeyValue"),
-						}
+						let kv = b.delete(i.to_be_bytes())?;
+						assert_eq!(kv.key(), i.to_be_bytes());
+						assert_eq!(kv.value(), i.to_string().as_bytes());
 					}
 				}
 				for i in 0..highest_int {
