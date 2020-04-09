@@ -11,7 +11,7 @@
 [![License](https://img.shields.io/crates/l/jammdb?style=flat-square)](https://crates.io/crates/jammdb)
 
 
-`jammdb` is an embedded, single-file database that allows you to store key-value pairs as bytes.
+`jammdb` is an embedded, single-file database that allows you to store key / value pairs as bytes.
 
 It started life as a Rust port of [Ben Johnson's](https://twitter.com/benbjohnson) awesome [BoltDB](https://github.com/boltdb/bolt),
 which was inspired by [Howard Chu's](https://twitter.com/hyc_symas) [LMDB](http://symas.com/mdb/),
@@ -72,7 +72,7 @@ fn main() -> Result<(), Error> {
     let mut tx = db.tx(true)?;
     // get the bucket we created in the last transaction
     let names_bucket = tx.get_bucket("names")?;
-    // get the key-value pair we inserted into the bucket
+    // get the key/ value pair we inserted into the bucket
     if let Some(Data::KeyValue(kv)) = names_bucket.get(b"Kanan") {
         assert_eq!(kv.value(), b"Jarrus");
     }
@@ -121,7 +121,7 @@ fn main() -> Result<(), Error> {
     let mut tx = db.tx(true)?;
     // get the bucket we created in the last transaction
     let users_bucket = tx.get_bucket("users")?;
-    // get the key-value pair we inserted into the bucket
+    // get the key / value pair we inserted into the bucket
     if let Some(Data::KeyValue(kv)) = users_bucket.get(b"user1") {
         // deserialize into a user struct
         let db_user: User = rmp_serde::from_slice(kv.value()).unwrap();

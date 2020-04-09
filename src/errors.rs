@@ -11,7 +11,7 @@ pub enum Error {
     BucketExists,
     /// Tried to get a bucket that does not exist
     BucketMissing,
-    /// Tried to delete a key-value pair that does not exist
+    /// Tried to delete a key / value pair that does not exist
     KeyValueMissing,
     /// Tried to get a bucket but found a key / value pair instead, or tried to put a key / value pair but found an existing bucket
     IncompatibleValue,
@@ -32,7 +32,7 @@ impl fmt::Display for Error {
         match self {
             Error::BucketExists => write!(f, "Bucket already exists"),
             Error::BucketMissing => write!(f, "Bucket does not exist"),
-            Error::KeyValueMissing => write!(f, "Key-Value pair does not exist"),
+            Error::KeyValueMissing => write!(f, "Key / Value pair does not exist"),
             Error::IncompatibleValue => write!(f, "Value not compatible"),
             Error::ReadOnlyTx => write!(f, "Cannot write in a read-only transaction"),
             Error::IOError(e) => write!(f, "IO Error: {}", e),

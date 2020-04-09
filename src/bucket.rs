@@ -357,7 +357,10 @@ impl Bucket {
 		self.meta.next_int
 	}
 
-	/// Gets data from a bucket.
+	/// Gets [`Data`] from a bucket.
+	///
+	/// Returns `None` if the key does not exist. Otherwise returns `Some(Data)` representing either a
+	/// key / value pair or a nested-bucket.
 	///
 	/// # Examples
 	///
@@ -391,6 +394,40 @@ impl Bucket {
 			c.current()
 		} else {
 			None
+		}
+	}
+
+	/// Gets a key / value pair from a bucket.
+	///
+	/// Returns `None` if the key does not exist, or if the key is for a nested bucket.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// use jammdb::{DB, Data};
+	/// # use jammdb::Error;
+	///
+	/// # fn main() -> Result<(), Error> {
+	/// let mut db = DB::open("my.db")?;
+	/// let mut tx = db.tx(false)?;
+	///
+	/// let bucket = tx.get_bucket("my-bucket")?;
+	/// bucket.create_bucket("sub-bucket")?;
+	/// bucket.put("some-key", "some-value")?;
+	///
+	/// if let Some(kv) = bucket.get_kv("some-key") {
+	///     assert_eq!(kv.value(), b"some-value");
+	/// }
+	/// assert!(bucket.get("sub-bucket").is_some());
+	/// assert!(bucket.get_kv("sub-bucket").is_none());
+	///
+	/// # Ok(())
+	/// # }
+	/// ```
+	pub fn get_kv<T: AsRef<[u8]>>(&self, key: T) -> Option<KVPair> {
+		match self.get(key) {
+			Some(Data::KeyValue(kv)) => Some(kv),
+			_ => None,
 		}
 	}
 
@@ -433,7 +470,29 @@ impl Bucket {
 		Ok(())
 	}
 
-	/// Deletes a key-value pair from the bucket
+	/// Deletes a key / value pair from the bucket
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// use jammdb::{DB};
+	/// # use jammdb::Error;
+	///
+	/// # fn main() -> Result<(), Error> {
+	/// let mut db = DB::open("my.db")?;
+	/// let mut tx = db.tx(false)?;
+	///
+	/// let bucket = tx.get_bucket("my-bucket")?;
+	/// // check if data is there
+	/// assert!(bucket.get_kv("some-key").is_some());
+	/// // delete the key / value pair
+	/// bucket.delete("some-key")?;
+	/// // data should no longer exist
+	/// assert!(bucket.get_kv("some-key").is_none());
+	///
+	/// # Ok(())
+	/// # }
+	/// ```
 	pub fn delete<T: AsRef<[u8]>>(&mut self, key: T) -> Result<Data> {
 		if !self.tx.writable {
 			return Err(Error::ReadOnlyTx);
@@ -670,6 +729,30 @@ mod tests {
 				Err(Error::IncompatibleValue)
 			);
 		}
-		Ok(())
+		db.check()
+	}
+
+	#[test]
+	fn test_get_kv() -> Result<()> {
+		let random_file = RandomFile::new();
+		let mut db = DB::open(&random_file)?;
+		{
+			let mut tx = db.tx(true)?;
+			let b = tx.create_bucket("abc")?;
+			b.create_bucket("nested-bucket")?;
+			b.put("key", "value")?;
+			assert_eq!(b.get_kv("key").unwrap().value(), b"value");
+			assert!(b.get_kv("nested-bucket").is_none());
+			assert!(b.get("nested-bucket").is_some());
+			tx.commit()?;
+		}
+		{
+			let mut tx = db.tx(false)?;
+			let b = tx.get_bucket("abc")?;
+			assert_eq!(b.get_kv("key").unwrap().value(), b"value");
+			assert!(b.get_kv("nested-bucket").is_none());
+			assert!(b.get("nested-bucket").is_some());
+		}
+		db.check()
 	}
 }
