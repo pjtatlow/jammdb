@@ -248,7 +248,7 @@ impl<'a> TransactionInner {
 		let page_id = match self.freelist.allocate(num_pages as usize) {
 			Some(page_id) => page_id,
 			None => {
-				let page_id = self.meta.num_pages + 1;
+				let page_id = self.meta.num_pages;
 				self.meta.num_pages += num_pages;
 				page_id
 			}
@@ -334,7 +334,7 @@ impl<'a> TransactionInner {
 
 	fn check(&self) -> Result<()> {
 		use std::collections::HashSet;
-		let mut unused_pages: HashSet<PageID> = (2..=self.meta.num_pages).collect();
+		let mut unused_pages: HashSet<PageID> = (2..self.meta.num_pages).collect();
 		let mut page_stack = Vec::new();
 		page_stack.push(self.meta.root.root_page);
 		page_stack.push(self.meta.freelist_page);
@@ -530,16 +530,16 @@ mod tests {
 			assert!(tx.file.is_some());
 			assert_eq!(tx.inner.freelist.pages(), vec![2, 3, 4, 5, 6]);
 			// allocate some pages from the freelist
-			assert_eq!(tx.inner.meta.num_pages, 9);
+			assert_eq!(tx.inner.meta.num_pages, 10);
 			assert_eq!(tx.inner.allocate(1), (2, 1));
 			assert_eq!(tx.inner.allocate(1), (3, 1));
 			assert_eq!(tx.inner.allocate(1), (4, 1));
 			assert_eq!(tx.inner.allocate(1), (5, 1));
 			assert_eq!(tx.inner.allocate(1), (6, 1));
 			// freelist should be empty so make sure the page is new
-			assert_eq!(tx.inner.meta.num_pages, 9);
-			assert_eq!(tx.inner.allocate(1), (10, 1));
 			assert_eq!(tx.inner.meta.num_pages, 10);
+			assert_eq!(tx.inner.allocate(1), (10, 1));
+			assert_eq!(tx.inner.meta.num_pages, 11);
 			assert_eq!(tx.inner.freelist.pages(), vec![]);
 		}
 		Ok(())
@@ -556,7 +556,7 @@ mod tests {
 		let mut tx = tx.inner;
 		// make sure we have an empty freelist and only four pages
 		assert_eq!(tx.freelist.pages().len(), 0);
-		assert_eq!(tx.meta.num_pages, 3);
+		assert_eq!(tx.meta.num_pages, 4);
 		// allocate one page worth of bytes
 		assert_eq!(tx.allocate(1024), (4, 1));
 		// allocate a half page worth of bytes
@@ -592,7 +592,7 @@ mod tests {
 		// allocate 3 pages worth of bytes (should come from freelist)
 		assert_eq!(tx.allocate(3000), (13, 3));
 		// allocate one byte (freelist should be empty now)
-		assert_eq!(tx.allocate(1), (100, 1));
+		assert_eq!(tx.allocate(1), (99, 1));
 		Ok(())
 	}
 
