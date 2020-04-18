@@ -23,7 +23,8 @@ so please check out both of these awesome projects!
 [isolated](https://en.wikipedia.org/wiki/Isolation_(database_systems)) transactions,
 with multiple lock-free readers and a single concurrent writer. The data is organized in a
 [single level](https://en.wikipedia.org/wiki/Single-level_store) [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree)
-so random and sequential reads are very fast. The underlying file is memory mapped, so reads require no additional memory allocation.
+so random and sequential reads are very fast. The underlying file is [memory mapped](https://en.wikipedia.org/wiki/Memory-mapped_file),
+so reads require no additional memory allocation.
 
 ## Supported platforms
 `jammdb` is continuously cross-compiled and tested on the following platforms:

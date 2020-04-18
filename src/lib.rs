@@ -12,7 +12,7 @@
 //! [isolated](https://en.wikipedia.org/wiki/Isolation_(database_systems)) transactions,
 //! with multiple lock-free readers and a single concurrent writer. The data is organized in a
 //! [single level](https://en.wikipedia.org/wiki/Single-level_store) [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree)
-//! so random and sequential reads are very fast. The underlying file is memory mapped, so reads require no additional memory allocation.
+//! so random and sequential reads are very fast. The underlying file is [memory mapped](https://en.wikipedia.org/wiki/Memory-mapped_file), so reads require no additional memory allocation.
 //!
 //! jammdb is meant to be very simple, and has only a few exported types. It will allow you to store data in collections (called [`Buckets`](struct.Bucket.html)),
 //! and each bucket can contain any number of unique keys which map to either an arbitrary value (a `&[u8]`) or a nested bucket. Examples on how to use jammdb are below.
