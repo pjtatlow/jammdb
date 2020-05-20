@@ -37,7 +37,7 @@
 //!     let mut tx = db.tx(true)?;
 //!
 //!     // create a bucket to store a map of first names to last names
-//!     let names_bucket = tx.create_bucket("names")?;
+//!     let mut names_bucket = tx.create_bucket("names")?;
 //!     names_bucket.put(b"Kanan", b"Jarrus")?;
 //!     names_bucket.put(b"Ezra", b"Bridger")?;
 //!
@@ -84,7 +84,7 @@
 //!     let mut tx = db.tx(true)?;
 //!
 //!     // create a bucket to store users
-//!     let users_bucket = tx.create_bucket("users")?;
+//!     let mut users_bucket = tx.create_bucket("users")?;
 //!
 //!     // serialize struct to bytes and store in bucket
 //!     let user_bytes = rmp_serde::to_vec(&user).unwrap();

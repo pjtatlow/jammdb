@@ -122,7 +122,7 @@ fn cursor_seek() -> Result<(), Error> {
 		let mut db = DB::open(&random_file.path)?;
 		{
 			let mut tx = db.tx(true)?;
-			let b = tx.create_bucket("abc")?;
+			let mut b = tx.create_bucket("abc")?;
 			{
 				let mut random_fruits = Vec::from(fruits.as_slice());
 				let mut rng = rand::thread_rng();
@@ -133,13 +133,13 @@ fn cursor_seek() -> Result<(), Error> {
 					b.put(fruit, index.to_string())?;
 				}
 			}
-			check_cursor_starts(&fruits, b);
+			check_cursor_starts(&fruits, &b);
 			tx.commit()?;
 		}
 		{
 			let mut tx = db.tx(false)?;
 			let b = tx.get_bucket("abc")?;
-			check_cursor_starts(&fruits, b);
+			check_cursor_starts(&fruits, &b);
 		}
 	}
 	{
@@ -147,27 +147,27 @@ fn cursor_seek() -> Result<(), Error> {
 		{
 			let mut tx = db.tx(false)?;
 			let b = tx.get_bucket("abc")?;
-			check_cursor_starts(&fruits, b);
+			check_cursor_starts(&fruits, &b);
 		}
 		{
 			let mut tx = db.tx(false)?;
 			let b = tx.get_bucket("abc")?;
 			println!("7 {} {:?}", fruits[7], &fruits[7..]);
-			check_cursor("bl", &fruits[6..], b, 6);
+			check_cursor("bl", &fruits[6..], &b, 6);
 		}
 		{
 			let mut tx = db.tx(true)?;
-			let b = tx.get_bucket("abc")?;
+			let mut b = tx.get_bucket("abc")?;
 			b.put("zomato", fruits.len().to_string())?;
 			fruits.push("zomato");
-			check_cursor_starts(&fruits, b);
+			check_cursor_starts(&fruits, &b);
 			tx.commit()?;
 		}
 		{
 			let mut tx = db.tx(false)?;
-			let b = tx.get_bucket("abc")?;
+			let mut b = tx.get_bucket("abc")?;
 			println!("7 {} {:?}", fruits[7], &fruits[7..]);
-			check_cursor("bl", &fruits[6..], b, 6);
+			check_cursor("bl", &fruits[6..], &mut b, 6);
 		}
 	}
 	let mut db = DB::open(&random_file.path)?;
@@ -176,7 +176,7 @@ fn cursor_seek() -> Result<(), Error> {
 
 // checks every start position and checks that you can iterate
 // starting from there
-fn check_cursor_starts(fruits: &Vec<&str>, b: &mut Bucket) {
+fn check_cursor_starts(fruits: &Vec<&str>, b: &Bucket) {
 	// randomly seek over the bucket
 	let mut random_fruits = Vec::from(fruits.as_slice());
 	let mut rng = rand::thread_rng();
@@ -188,7 +188,7 @@ fn check_cursor_starts(fruits: &Vec<&str>, b: &mut Bucket) {
 	}
 }
 
-fn check_cursor(seek_to: &str, expected_fruits: &[&str], b: &mut Bucket, start_index: usize) {
+fn check_cursor(seek_to: &str, expected_fruits: &[&str], b: &Bucket, start_index: usize) {
 	let mut cur_index = 0;
 	let mut cursor = b.cursor();
 	let exists = cursor.seek(seek_to);

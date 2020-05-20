@@ -34,7 +34,7 @@ fn test_insert(mut values: Vec<u64>) -> Result<(), Error> {
 		let mut db = DB::open(&random_file.path)?;
 		{
 			let mut tx = db.tx(true)?;
-			let b = tx.create_bucket("abc")?;
+			let mut b = tx.create_bucket("abc")?;
 			// insert data in a random order
 			values.shuffle(&mut rng);
 			for i in values.iter() {

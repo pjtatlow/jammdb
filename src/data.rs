@@ -106,7 +106,7 @@ impl Data {
 /// # fn main() -> Result<(), Error> {
 /// let mut db = DB::open("my.db")?;
 /// let mut tx = db.tx(true)?;
-/// let bucket = tx.create_bucket("my-bucket")?;
+/// let mut bucket = tx.create_bucket("my-bucket")?;
 ///
 /// bucket.create_bucket("my-nested-bucket")?;
 /// if let Some(data) = bucket.get("my-nested-bucket") {
@@ -176,7 +176,7 @@ impl BucketData {
 /// # fn main() -> Result<(), Error> {
 /// let mut db = DB::open("my.db")?;
 /// let mut tx = db.tx(false)?;
-/// let bucket = tx.get_bucket("my-bucket")?;
+/// let mut bucket = tx.get_bucket("my-bucket")?;
 ///
 /// // put a key / value pair into the bucket
 /// bucket.put("my-key", "my-value")?;

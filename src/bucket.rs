@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::fs::File;
+use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 
 use crate::cursor::{Cursor, PageNode, PageNodeID};
@@ -35,7 +37,7 @@ use crate::transaction::TransactionInner;
 /// let mut tx = db.tx(true)?;
 ///
 /// // create a root-level bucket
-/// let bucket = tx.create_bucket("my-bucket")?;
+/// let mut bucket = tx.create_bucket("my-bucket")?;
 ///
 /// // create nested bucket
 /// bucket.create_bucket("nested-bucket")?;
@@ -139,10 +141,10 @@ impl Bucket {
 	/// let mut tx = db.tx(false)?;
 	///
 	/// // get a root-level bucket
-	/// let bucket = tx.get_bucket("my-bucket")?;
+	/// let mut bucket = tx.get_bucket("my-bucket")?;
 	///
 	/// // get nested bucket
-	/// let sub_bucket = bucket.get_bucket("nested-bucket")?;
+	/// let mut sub_bucket = bucket.get_bucket("nested-bucket")?;
 	///
 	/// // get nested bucket
 	/// let sub_sub_bucket = sub_bucket.get_bucket("double-nested-bucket")?;
@@ -150,29 +152,8 @@ impl Bucket {
 	/// # Ok(())
 	/// # }
 	/// ```
-	pub fn get_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<&mut Bucket> {
-		let name = name.as_ref();
-		let key = Vec::from(name);
-		if !self.buckets.contains_key(&key) {
-			let mut c = self.cursor();
-			let exists = c.seek(name);
-			if !exists {
-				return Err(Error::BucketMissing);
-			}
-			match c.current() {
-				Some(data) => match data {
-					Data::Bucket(data) => {
-						let mut b = self.from_meta(data.meta());
-						b.meta = data.meta();
-						b.dirty = false;
-						self.buckets.insert(key.clone(), Pin::new(Box::new(b)));
-					}
-					_ => return Err(Error::IncompatibleValue),
-				},
-				None => return Err(Error::BucketMissing),
-			}
-		}
-		Ok(self.buckets.get_mut(&key).unwrap())
+	pub fn get_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<BucketRef> {
+		self.bucket_getter(name.as_ref(), false, false)
 	}
 
 	/// Creates a new bucket.
@@ -192,46 +173,105 @@ impl Bucket {
 	/// let mut tx = db.tx(true)?;
 	///
 	/// // create a root-level bucket
-	/// let bucket = tx.create_bucket("my-bucket")?;
+	/// let mut bucket = tx.create_bucket("my-bucket")?;
 	///
 	/// // create nested bucket
-	/// let sub_bucket = bucket.create_bucket("nested-bucket")?;
+	/// let mut sub_bucket = bucket.create_bucket("nested-bucket")?;
 	///
 	/// // create nested bucket
-	/// let sub_sub_bucket = sub_bucket.create_bucket("double-nested-bucket")?;
+	/// let mut sub_sub_bucket = sub_bucket.create_bucket("double-nested-bucket")?;
 	///
 	/// # Ok(())
 	/// # }
 	/// ```
-	pub fn create_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<&mut Bucket> {
+	pub fn create_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<BucketRef> {
 		if !self.tx.writable {
 			return Err(Error::ReadOnlyTx);
 		}
-		self.dirty = true;
-		let mut c = self.cursor();
-		let name = name.as_ref();
-		let exists = c.seek(name);
-		if exists {
-			if c.current().unwrap().is_kv() {
-				return Err(Error::IncompatibleValue);
+		self.bucket_getter(name.as_ref(), true, true)
+	}
+
+	/// Creates a new bucket if it doesn't exist
+	///
+	/// Returns an error if
+	/// 1. It is in a read-only transaction
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// use jammdb::{DB};
+	/// # use jammdb::Error;
+	///
+	/// # fn main() -> Result<(), Error> {
+	/// let mut db = DB::open("my.db")?;
+	/// {
+	///     let mut tx = db.tx(true)?;
+	///     // create a root-level bucket
+	///     let mut bucket = tx.get_or_create_bucket("my-bucket")?;
+	///     tx.commit()?;
+	/// }
+	/// {
+	///     let mut tx = db.tx(true)?;
+	///     // get the existing a root-level bucket
+	///     let mut bucket = tx.get_or_create_bucket("my-bucket")?;
+	/// }
+	///
+	/// # Ok(())
+	/// # }
+	/// ```
+	pub fn get_or_create_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<BucketRef> {
+		if !self.tx.writable {
+			return Err(Error::ReadOnlyTx);
+		}
+		self.bucket_getter(name.as_ref(), true, false)
+	}
+
+	fn bucket_getter(
+		&mut self,
+		name: &[u8],
+		should_create: bool,
+		must_create: bool,
+	) -> Result<BucketRef> {
+		let key = Vec::from(name);
+		if !self.buckets.contains_key(&key) {
+			let mut c = self.cursor();
+			let exists = c.seek(name);
+			if !exists {
+				if should_create {
+					self.meta.next_int += 1;
+					let key = Vec::from(name);
+					self.new_child(&key);
+					let data = {
+						let b = self.buckets.get(&key).unwrap();
+						let key = self.tx.copy_data(name);
+						Data::Bucket(BucketData::from_meta(key, &b.meta))
+					};
+					let node = self.node(c.current_id());
+					node.insert_data(data);
+				} else {
+					return Err(Error::BucketMissing);
+				}
+			} else {
+				match c.current() {
+					Some(data) => match data {
+						Data::Bucket(data) => {
+							if must_create {
+								return Err(Error::BucketExists);
+							}
+							let mut b = self.from_meta(data.meta());
+							b.meta = data.meta();
+							b.dirty = false;
+							self.buckets.insert(key.clone(), Pin::new(Box::new(b)));
+						}
+						_ => return Err(Error::IncompatibleValue),
+					},
+					None => return Err(Error::BucketMissing),
+				}
 			}
+		} else if must_create {
 			return Err(Error::BucketExists);
 		}
-		self.meta.next_int += 1;
-		let key = Vec::from(name);
-		self.new_child(&key);
-
-		let data = {
-			let b = self.buckets.get(&key).unwrap();
-			let key = self.tx.copy_data(name);
-
-			Data::Bucket(BucketData::from_meta(key, &b.meta))
-		};
-
-		let node = self.node(c.current_id());
-		node.insert_data(data);
-		let b = self.buckets.get_mut(&key).unwrap();
-		Ok(b)
+		Ok(BucketRef::new(self.buckets.get(&key).unwrap()))
 	}
 
 	/// Deletes an bucket.
@@ -252,7 +292,7 @@ impl Bucket {
 	/// let mut tx = db.tx(true)?;
 	///
 	/// // get a root-level bucket
-	/// let bucket = tx.get_bucket("my-bucket")?;
+	/// let mut bucket = tx.get_bucket("my-bucket")?;
 	///
 	/// // delete nested bucket
 	/// bucket.delete_bucket("nested-bucket")?;
@@ -334,11 +374,12 @@ impl Bucket {
 	/// let mut tx = db.tx(true)?;
 	///
 	/// // create a root-level bucket
-	/// let bucket = tx.create_bucket("my-bucket")?;
+	/// let mut bucket = tx.create_bucket("my-bucket")?;
 	/// // starts at 0
 	/// assert_eq!(bucket.next_int(), 0);
 	///
-	/// bucket.put(bucket.next_int().to_be_bytes(), [0]);
+	/// let next_int = bucket.next_int();
+	/// bucket.put(next_int.to_be_bytes(), [0]);
 	/// // auto-incremented after inserting a key / value pair
 	/// assert_eq!(bucket.next_int(), 1);
 	///
@@ -411,7 +452,7 @@ impl Bucket {
 	/// let mut db = DB::open("my.db")?;
 	/// let mut tx = db.tx(false)?;
 	///
-	/// let bucket = tx.get_bucket("my-bucket")?;
+	/// let mut bucket = tx.get_bucket("my-bucket")?;
 	/// bucket.create_bucket("sub-bucket")?;
 	/// bucket.put("some-key", "some-value")?;
 	///
@@ -445,7 +486,7 @@ impl Bucket {
 	/// let mut tx = db.tx(true)?;
 	///
 	/// // create a root-level bucket
-	/// let bucket = tx.create_bucket("my-bucket")?;
+	/// let mut bucket = tx.create_bucket("my-bucket")?;
 	///
 	/// // insert data
 	/// bucket.put("123", "456")?;
@@ -491,7 +532,7 @@ impl Bucket {
 	/// let mut db = DB::open("my.db")?;
 	/// let mut tx = db.tx(false)?;
 	///
-	/// let bucket = tx.get_bucket("my-bucket")?;
+	/// let mut bucket = tx.get_bucket("my-bucket")?;
 	/// // check if data is there
 	/// assert!(bucket.get_kv("some-key").is_some());
 	/// // delete the key / value pair
@@ -688,6 +729,34 @@ impl Bucket {
 	}
 }
 
+pub struct BucketRef<'a> {
+	bucket: *const Bucket,
+	_phantom: PhantomData<&'a ()>,
+}
+
+impl<'a> BucketRef<'a> {
+	fn new(b: &Bucket) -> BucketRef {
+		BucketRef {
+			bucket: b as *const Bucket,
+			_phantom: PhantomData {},
+		}
+	}
+}
+
+impl<'a> Deref for BucketRef<'a> {
+	type Target = Bucket;
+
+	fn deref(&self) -> &Self::Target {
+		unsafe { &*self.bucket }
+	}
+}
+
+impl<'a> DerefMut for BucketRef<'a> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		unsafe { &mut *(self.bucket as *mut Bucket) }
+	}
+}
+
 const META_SIZE: usize = std::mem::size_of::<BucketMeta>();
 
 #[repr(C)]
@@ -718,7 +787,7 @@ mod tests {
 		{
 			let mut tx = db.tx(true)?;
 			assert_eq!(tx.get_bucket("abc").err(), Some(Error::BucketMissing));
-			let b = tx.create_bucket("abc")?;
+			let mut b = tx.create_bucket("abc")?;
 			b.put("key", "value")?;
 			assert_eq!(b.create_bucket("key").err(), Some(Error::IncompatibleValue));
 			b.create_bucket("nested-bucket")?;
@@ -736,7 +805,7 @@ mod tests {
 		}
 		{
 			let mut tx = db.tx(true)?;
-			let b = tx.get_bucket("abc")?;
+			let mut b = tx.get_bucket("abc")?;
 			assert_eq!(b.create_bucket("key").err(), Some(Error::IncompatibleValue));
 			assert_eq!(
 				b.put("nested-bucket", "value"),
@@ -752,7 +821,7 @@ mod tests {
 		let mut db = DB::open(&random_file)?;
 		{
 			let mut tx = db.tx(true)?;
-			let b = tx.create_bucket("abc")?;
+			let mut b = tx.create_bucket("abc")?;
 			b.create_bucket("nested-bucket")?;
 			b.put("key", "value")?;
 			assert_eq!(b.get_kv("key").unwrap().value(), b"value");

@@ -5,7 +5,7 @@ use std::sync::{Arc, MutexGuard};
 
 use memmap::Mmap;
 
-use crate::bucket::Bucket;
+use crate::bucket::{Bucket, BucketRef};
 use crate::data::{BucketData, SliceParts};
 use crate::db::{DBInner, MIN_ALLOC_SIZE};
 use crate::errors::Error;
@@ -106,7 +106,7 @@ impl<'a> Transaction<'a> {
 	/// or an [`IncompatibleValue`](enum.Error.html#variant.IncompatibleValue) error if the key exists but is not a bucket.
 	///
 	/// In a read-only transaction, you will get an error when trying to use any of the bucket's methods that modify data.
-	pub fn get_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<&mut Bucket> {
+	pub fn get_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<BucketRef> {
 		self.inner.get_bucket(name.as_ref())
 	}
 
@@ -117,8 +117,19 @@ impl<'a> Transaction<'a> {
 	/// Will return a [`BucketExists`](enum.Error.html#variant.BucketExists) error if the bucket already exists,
 	/// an [`IncompatibleValue`](enum.Error.html#variant.IncompatibleValue) error if the key exists but is not a bucket,
 	/// or a [`ReadOnlyTx`](enum.Error.html#variant.ReadOnlyTx) error if this is called on a read-only transaction.
-	pub fn create_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<&mut Bucket> {
+	pub fn create_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<BucketRef> {
 		self.inner.create_bucket(name.as_ref())
+	}
+
+	/// Creates an existing root-level bucket with the given name if it does not already exist.
+	/// Gets the existing bucket if it does exist.
+	///
+	/// # Errors
+	///
+	/// Will return an [`IncompatibleValue`](enum.Error.html#variant.IncompatibleValue) error if the key exists but is not a bucket,
+	/// or a [`ReadOnlyTx`](enum.Error.html#variant.ReadOnlyTx) error if this is called on a read-only transaction.
+	pub fn get_or_create_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<BucketRef> {
+		self.inner.get_or_create_bucket(name.as_ref())
 	}
 
 	/// Deletes an existing root-level bucket with the given name
@@ -212,12 +223,17 @@ impl<'a> TransactionInner {
 		Page::from_buf(&self.data, id, self.db.pagesize)
 	}
 
-	fn get_bucket(&'a mut self, name: &[u8]) -> Result<&'a mut Bucket> {
+	fn get_bucket(&'a mut self, name: &[u8]) -> Result<BucketRef> {
 		let root = self.root.as_mut().unwrap();
 		root.get_bucket(name)
 	}
 
-	fn create_bucket(&'a mut self, name: &[u8]) -> Result<&'a mut Bucket> {
+	fn get_or_create_bucket(&'a mut self, name: &[u8]) -> Result<BucketRef> {
+		let root = self.root.as_mut().unwrap();
+		root.get_or_create_bucket(name)
+	}
+
+	fn create_bucket(&'a mut self, name: &[u8]) -> Result<BucketRef> {
 		let root = self.root.as_mut().unwrap();
 		root.create_bucket(name)
 	}
@@ -471,7 +487,7 @@ mod tests {
 
 		let mut tx = db.tx(false)?;
 		assert!(tx.create_bucket("def").is_err());
-		let b = tx.get_bucket("abc")?;
+		let mut b = tx.get_bucket("abc")?;
 		assert_eq!(b.put("key", "value"), Err(Error::ReadOnlyTx));
 		assert_eq!(b.delete("key"), Err(Error::ReadOnlyTx));
 		assert_eq!(b.create_bucket("dev").err(), Some(Error::ReadOnlyTx));
@@ -507,7 +523,7 @@ mod tests {
 				assert!(tx.file.is_some());
 				assert_eq!(tx.inner.meta.tx_id, 1);
 				assert_eq!(tx.inner.freelist.pages(), vec![]);
-				let b = tx.create_bucket("abc")?;
+				let mut b = tx.create_bucket("abc")?;
 				b.put("123", "456")?;
 				tx.commit()?;
 			}
@@ -518,7 +534,7 @@ mod tests {
 				assert!(tx.file.is_some());
 				assert_eq!(tx.inner.meta.tx_id, 2);
 				assert_eq!(tx.inner.freelist.pages(), vec![2, 3]);
-				let b = tx.get_bucket("abc")?;
+				let mut b = tx.get_bucket("abc")?;
 				b.put("123", "456")?;
 				tx.commit()?;
 			}

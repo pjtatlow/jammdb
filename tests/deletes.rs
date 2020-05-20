@@ -33,7 +33,7 @@ fn test_deletes(highest_int: u64) -> Result<(), Error> {
 		let mut db = DB::open(&random_file.path)?;
 		{
 			let mut tx = db.tx(true)?;
-			let b = tx.create_bucket("abc")?;
+			let mut b = tx.create_bucket("abc")?;
 			for i in 0..highest_int {
 				b.put(i.to_be_bytes(), i.to_string())?;
 			}
@@ -46,7 +46,7 @@ fn test_deletes(highest_int: u64) -> Result<(), Error> {
 		loop {
 			{
 				let mut tx = db.tx(true)?;
-				let b = tx.get_bucket("abc")?;
+				let mut b = tx.get_bucket("abc")?;
 				// delete between 0 and 100 random items
 				for _ in 0..rng.gen_range(10, 100) {
 					let i = id_iter.next();
@@ -108,7 +108,7 @@ fn delete_simple_bucket() -> Result<(), Error> {
 	let mut db = DB::open(&random_file.path)?;
 	{
 		let mut tx = db.tx(true)?;
-		let b = tx.create_bucket("abc")?;
+		let mut b = tx.create_bucket("abc")?;
 		for i in 0..10_u64 {
 			b.put(i.to_be_bytes(), i.to_string())?;
 		}
@@ -119,7 +119,7 @@ fn delete_simple_bucket() -> Result<(), Error> {
 		tx.delete_bucket("abc")?;
 		assert_eq!(tx.get_bucket("abc").err(), Some(Error::BucketMissing));
 		// delete a freshly created bucket
-		let b = tx.create_bucket("def")?;
+		let mut b = tx.create_bucket("def")?;
 		b.put("some", "data")?;
 		tx.delete_bucket("def")?;
 
@@ -139,9 +139,9 @@ fn delete_large_bucket_with_large_nested_buckets() -> Result<(), Error> {
 	let mut db = DB::open(&random_file.path)?;
 	{
 		let mut tx = db.tx(true)?;
-		let b = tx.create_bucket("abc")?;
+		let mut b = tx.create_bucket("abc")?;
 		for i in 0..50_u64 {
-			let sub_bucket = b.create_bucket(i.to_be_bytes())?;
+			let mut sub_bucket = b.create_bucket(i.to_be_bytes())?;
 			for i in 0..1000_u64 {
 				sub_bucket.put(i.to_be_bytes(), i.to_string().repeat(10))?;
 			}
