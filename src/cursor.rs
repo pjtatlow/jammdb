@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use crate::bucket::Bucket;
 use crate::data::Data;
 use crate::node::{Node, NodeData, NodeID};
@@ -132,18 +134,20 @@ impl PageNode {
 /// # Ok(())
 /// # }
 /// ```
-pub struct Cursor {
+pub struct Cursor<'a> {
 	bucket: Ptr<Bucket>,
 	stack: Vec<Elem>,
 	next_called: bool,
+	_phantom: PhantomData<&'a ()>,
 }
 
-impl Cursor {
-	pub(crate) fn new(b: Ptr<Bucket>) -> Cursor {
+impl<'a> Cursor<'a> {
+	pub(crate) fn new(b: Ptr<Bucket>) -> Cursor<'a> {
 		Cursor {
 			bucket: b,
 			stack: vec![],
 			next_called: false,
+			_phantom: PhantomData {},
 		}
 	}
 
@@ -224,7 +228,7 @@ impl Cursor {
 	}
 }
 
-impl Iterator for Cursor {
+impl<'a> Iterator for Cursor<'a> {
 	type Item = Data;
 
 	fn next(&mut self) -> Option<Self::Item> {

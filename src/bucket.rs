@@ -236,6 +236,7 @@ impl Bucket {
 		if !self.buckets.contains_key(&key) {
 			let mut c = self.cursor();
 			let exists = c.seek(name);
+			let current_id = c.current_id();
 			if !exists {
 				if should_create {
 					self.meta.next_int += 1;
@@ -246,7 +247,7 @@ impl Bucket {
 						let key = self.tx.copy_data(name);
 						Data::Bucket(BucketData::from_meta(key, &b.meta))
 					};
-					let node = self.node(c.current_id());
+					let node = self.node(current_id);
 					node.insert_data(data);
 				} else {
 					return Err(Error::BucketMissing);
@@ -345,10 +346,12 @@ impl Bucket {
 		let exists = c.seek(&name);
 		if exists {
 			let data = c.current().unwrap();
+			let current_id = c.current_id();
+			let index = c.current_index();
 			if !data.is_kv() {
 				self.dirty = true;
-				let node = self.node(c.current_id());
-				node.delete(c.current_index());
+				let node = self.node(current_id);
+				node.delete(index);
 				Ok(())
 			} else {
 				Err(Error::IncompatibleValue)
@@ -552,9 +555,11 @@ impl Bucket {
 		if exists {
 			let data = c.current().unwrap();
 			if data.is_kv() {
+				let current_id = c.current_id();
+				let index = c.current_index();
 				self.dirty = true;
-				let node = self.node(c.current_id());
-				match node.delete(c.current_index()) {
+				let node = self.node(current_id);
+				match node.delete(index) {
 					Data::KeyValue(kv) => Ok(kv),
 					_ => panic!("Unexpected data"),
 				}
@@ -569,6 +574,7 @@ impl Bucket {
 	fn put_data(&mut self, data: Data) -> Result<Option<Data>> {
 		let mut c = self.cursor();
 		let exists = c.seek(data.key());
+		let current_id = c.current_id();
 		let current_data = if exists {
 			let current = c.current().unwrap();
 			if current.is_kv() != data.is_kv() {
@@ -579,7 +585,7 @@ impl Bucket {
 			self.meta.next_int += 1;
 			None
 		};
-		let node = self.node(c.current_id());
+		let node = self.node(current_id);
 		node.insert_data(data);
 		self.dirty = true;
 		Ok(current_data)
