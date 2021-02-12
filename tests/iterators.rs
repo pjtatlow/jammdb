@@ -198,7 +198,7 @@ fn check_cursor(seek_to: &str, expected_fruits: &[&str], b: &Bucket, start_index
 	for data in cursor {
 		assert!(cur_index < expected_fruits.len());
 		let expected_fruit = expected_fruits[cur_index];
-		if let Data::KeyValue(kv) = data {
+		if let Data::KeyValue(kv) = &*data {
 			println!("KEY {}", std::str::from_utf8(kv.key()).unwrap());
 			assert_eq!(expected_fruit.as_bytes(), kv.key());
 			let value_string = (cur_index + start_index).to_string();

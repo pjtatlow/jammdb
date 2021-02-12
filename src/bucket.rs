@@ -6,7 +6,7 @@ use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 
 use crate::cursor::{Cursor, PageNode, PageNodeID};
-use crate::data::{BucketData, Data, KVPair};
+use crate::data::{BucketData, Data, KVPair, Ref};
 use crate::errors::{Error, Result};
 use crate::node::{Branch, Node, NodeData, NodeID};
 use crate::page::{Page, PageID};
@@ -50,7 +50,7 @@ use crate::transaction::TransactionInner;
 /// bucket.put([1,2,3], [4,5,6]);
 ///
 /// for data in bucket.cursor() {
-///     match data {
+///     match &*data {
 ///         Data::Bucket(b) => println!("found a bucket with the name {:?}", b.name()),
 ///         Data::KeyValue(kv) => println!("found a kv pair {:?} {:?}", kv.key(), kv.value()),
 ///     }
@@ -114,8 +114,12 @@ impl Bucket {
 	/// # Ok(())
 	/// # }
 	/// ```
-	pub fn put<T: AsRef<[u8]>, S: AsRef<[u8]>>(&self, key: T, value: S) -> Result<Option<KVPair>> {
-		self.inner.borrow_mut().put(key, value)
+	pub fn put<T: AsRef<[u8]>, S: AsRef<[u8]>>(
+		&self,
+		key: T,
+		value: S,
+	) -> Result<Option<Ref<KVPair>>> {
+		Ok(self.inner.borrow_mut().put(key, value)?.map(Ref::new))
 	}
 
 	/// Get a cursor to iterate over the bucket.
@@ -134,7 +138,7 @@ impl Bucket {
 	/// let bucket = tx.get_bucket("my-bucket")?;
 	///
 	/// for data in bucket.cursor() {
-	///     match data {
+	///     match &*data {
 	///         Data::Bucket(b) => println!("found a bucket with the name {:?}", b.name()),
 	///         Data::KeyValue(kv) => println!("found a kv pair {:?} {:?}", kv.key(), kv.value()),
 	///     }
@@ -204,8 +208,8 @@ impl Bucket {
 	/// # Ok(())
 	/// # }
 	/// ```
-	pub fn delete<T: AsRef<[u8]>>(&self, key: T) -> Result<KVPair> {
-		self.inner.borrow_mut().delete(key)
+	pub fn delete<T: AsRef<[u8]>>(&self, key: T) -> Result<Ref<KVPair>> {
+		Ok(Ref::new(self.inner.borrow_mut().delete(key)?))
 	}
 
 	/// Creates a new bucket.
@@ -302,8 +306,8 @@ impl Bucket {
 	/// # Ok(())
 	/// # }
 	/// ```
-	pub fn delete_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<()> {
-		self.inner.get_mut().delete_bucket(name)
+	pub fn delete_bucket<T: AsRef<[u8]>>(&self, name: T) -> Result<()> {
+		self.inner.borrow_mut().delete_bucket(name)
 	}
 
 	/// Returns the next integer for the bucket.
@@ -383,7 +387,7 @@ impl Bucket {
 	///
 	/// match bucket.get("some-key") {
 	///     Some(data) => {
-	///         match data {
+	///         match &*data {
 	///             Data::Bucket(b) => println!("found a bucket with the name {:?}", b.name()),
 	///             Data::KeyValue(kv) => println!("found a kv pair {:?} {:?}", kv.key(), kv.value()),
 	///         }
@@ -394,11 +398,11 @@ impl Bucket {
 	/// # Ok(())
 	/// # }
 	/// ```
-	pub fn get<T: AsRef<[u8]>>(&self, key: T) -> Option<Data> {
+	pub fn get<T: AsRef<[u8]>>(&self, key: T) -> Option<Ref<Data>> {
 		let mut c = self.cursor();
 		let exists = c.seek(key);
 		if exists {
-			c.current()
+			c.current().map(Ref::new)
 		} else {
 			None
 		}
@@ -431,9 +435,12 @@ impl Bucket {
 	/// # Ok(())
 	/// # }
 	/// ```
-	pub fn get_kv<T: AsRef<[u8]>>(&self, key: T) -> Option<KVPair> {
+	pub fn get_kv<T: AsRef<[u8]>>(&self, key: T) -> Option<Ref<KVPair>> {
 		match self.get(key) {
-			Some(Data::KeyValue(kv)) => Some(kv),
+			Some(data) => match &*data {
+				Data::KeyValue(kv) => Some(Ref::new(kv.clone())),
+				_ => None,
+			},
 			_ => None,
 		}
 	}

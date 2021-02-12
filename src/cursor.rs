@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::bucket::BucketInner;
-use crate::data::Data;
+use crate::data::{Data, Ref};
 use crate::node::{Node, NodeData, NodeID};
 use crate::page::{Page, PageID};
 use crate::ptr::Ptr;
@@ -117,7 +117,7 @@ impl PageNode {
 ///
 /// // create a cursor and use it to iterate over the entire bucket
 /// for data in bucket.cursor() {
-///     match data {
+///     match &*data {
 ///         Data::Bucket(b) => println!("found a bucket with the name {:?}", b.name()),
 ///         Data::KeyValue(kv) => println!("found a kv pair {:?} {:?}", kv.key(), kv.value()),
 ///     }
@@ -229,7 +229,7 @@ impl<'a> Cursor<'a> {
 }
 
 impl<'a> Iterator for Cursor<'a> {
-	type Item = Data;
+	type Item = Ref<'a, Data>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.stack.is_empty() {
@@ -251,7 +251,7 @@ impl<'a> Iterator for Cursor<'a> {
 			}
 		}
 		self.next_called = true;
-		self.current()
+		self.current().map(Ref::new)
 	}
 }
 

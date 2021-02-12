@@ -1,10 +1,61 @@
 use std::cmp::{Ord, Ordering};
 use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
+use std::ops::Deref;
 
 use crate::bucket::BucketMeta;
 use crate::node::{Node, NodeType};
 use crate::page::LeafElement;
+
+/// A wrapper around data to ensure it is used before a bucket goes out of scope
+pub struct Ref<'a, T> {
+	inner: T,
+	_phantom: PhantomData<&'a ()>,
+}
+
+impl<'a, T> Ref<'a, T> {
+	pub(crate) fn new(inner: T) -> Ref<'a, T> {
+		Ref {
+			inner,
+			_phantom: PhantomData {},
+		}
+	}
+}
+
+impl<'a, T> Deref for Ref<'a, T> {
+	type Target = T;
+
+	fn deref(&self) -> &Self::Target {
+		&self.inner
+	}
+}
+
+impl<'a, T: fmt::Debug> fmt::Debug for Ref<'a, T> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		self.inner.fmt(f)
+	}
+}
+
+impl<'a, T: Ord> Ord for Ref<'a, T> {
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.inner.cmp(other)
+	}
+}
+
+impl<'a, T: PartialOrd> PartialOrd for Ref<'a, T> {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		self.inner.partial_cmp(other)
+	}
+}
+
+impl<'a, T: PartialEq> PartialEq for Ref<'a, T> {
+	fn eq(&self, other: &Self) -> bool {
+		self.inner.eq(other)
+	}
+}
+
+impl<'a, T: Eq> Eq for Ref<'a, T> {}
 
 /// Key / Value or Bucket Data
 ///
@@ -23,7 +74,7 @@ use crate::page::LeafElement;
 /// let bucket = tx.create_bucket("my-bucket")?;
 ///
 /// if let Some(data) = bucket.get("my-key") {
-///     match data {
+///     match &*data {
 ///         Data::Bucket(b) => assert_eq!(b.name(), b"my-key"),
 ///         Data::KeyValue(kv) => assert_eq!(kv.key(), b"my-key"),
 ///     }
@@ -83,8 +134,19 @@ impl Data {
 		}
 	}
 
-	pub(crate) fn is_kv(&self) -> bool {
+	/// Checks if the `Data` is a `KVPair`
+	pub fn is_kv(&self) -> bool {
 		matches!(self, Data::KeyValue(_))
+	}
+
+	/// Asserts that the `Data` is a `KVPair` and returns the inner data
+	///
+	/// This is an ergonomic function since data is wrapped up in a `Ref` and matching is annoying
+	pub fn kv(&self) -> &KVPair {
+		if let Self::KeyValue(kv) = self {
+			return kv;
+		}
+		panic!("Cannot get KVPair from BucketData");
 	}
 }
 
@@ -107,7 +169,7 @@ impl Data {
 ///
 /// bucket.create_bucket("my-nested-bucket")?;
 /// if let Some(data) = bucket.get("my-nested-bucket") {
-///     if let Data::Bucket(b) = data {
+///     if let Data::Bucket(b) = &*data {
 ///         let name: &[u8] = b.name();
 ///         assert_eq!(name, b"my-nested-bucket");
 ///         let nested_bucket = bucket.get_bucket(b.name()).unwrap();
@@ -178,7 +240,7 @@ impl BucketData {
 /// // put a key / value pair into the bucket
 /// bucket.put("my-key", "my-value")?;
 /// if let Some(data) = bucket.get("my-key") {
-///     if let Data::KeyValue(kv) = data {
+///     if let Data::KeyValue(kv) = &*data {
 ///         let key: &[u8] = kv.key();
 ///         let value: &[u8] = kv.value();
 ///         assert_eq!(key, b"my-key");

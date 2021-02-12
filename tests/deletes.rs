@@ -1,4 +1,4 @@
-use jammdb::{Data, Error, DB};
+use jammdb::{Error, DB};
 use rand::prelude::*;
 use std::collections::HashSet;
 
@@ -65,13 +65,10 @@ fn test_deletes(highest_int: u64) -> Result<(), Error> {
 					if deleted.contains(&i) {
 						assert_eq!(data, None)
 					} else {
-						match data {
-							Some(Data::KeyValue(kv)) => {
-								assert_eq!(kv.key(), i.to_be_bytes());
-								assert_eq!(kv.value(), i.to_string().as_bytes());
-							}
-							_ => panic!("Expected Data::KeyValue"),
-						}
+						let data = data.unwrap();
+						let kv = data.kv();
+						assert_eq!(kv.key(), i.to_be_bytes());
+						assert_eq!(kv.value(), i.to_string().as_bytes());
 					}
 				}
 				tx.commit()?;
@@ -84,13 +81,10 @@ fn test_deletes(highest_int: u64) -> Result<(), Error> {
 					if deleted.contains(&i) {
 						assert_eq!(data, None)
 					} else {
-						match data {
-							Some(Data::KeyValue(kv)) => {
-								assert_eq!(kv.key(), i.to_be_bytes());
-								assert_eq!(kv.value(), i.to_string().as_bytes());
-							}
-							_ => panic!("Expected Some(Data::KeyValue) at index {}: {:?}", i, data),
-						}
+						let data = data.unwrap();
+						let kv = data.kv();
+						assert_eq!(kv.key(), i.to_be_bytes());
+						assert_eq!(kv.value(), i.to_string().as_bytes());
 					}
 				}
 			}

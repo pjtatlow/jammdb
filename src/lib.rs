@@ -52,8 +52,8 @@
 //!     // get the bucket we created in the last transaction
 //!     let names_bucket = tx.get_bucket("names")?;
 //!     // get the key / value pair we inserted into the bucket
-//!     if let Some(Data::KeyValue(kv)) = names_bucket.get(b"Kanan") {
-//!         assert_eq!(kv.value(), b"Jarrus");
+//!     if let Some(data) = names_bucket.get(b"Kanan") {
+//!         assert_eq!(data.kv().value(), b"Jarrus");
 //!     }
 //! }
 //!     Ok(())
@@ -101,9 +101,9 @@
 //!     // get the bucket we created in the last transaction
 //!     let users_bucket = tx.get_bucket("users")?;
 //!     // get the key / value pair we inserted into the bucket
-//!     if let Some(Data::KeyValue(kv)) = users_bucket.get(b"user1") {
+//!     if let Some(data) = users_bucket.get(b"user1") {
 //!         // deserialize into a user struct
-//!         let db_user: User = rmp_serde::from_slice(kv.value()).unwrap();
+//!         let db_user: User = rmp_serde::from_slice(data.kv().value()).unwrap();
 //!         assert_eq!(db_user, user);
 //!     }
 //! }
