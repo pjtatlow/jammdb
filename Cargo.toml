@@ -1,7 +1,7 @@
 [package]
 name = "jammdb"
 description = "An embedded single-file database for Rust"
-version = "0.3.1"
+version = "0.4.0"
 authors = ["PJ Tatlow <pjtatlow@gmail.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
