@@ -32,8 +32,8 @@ fn test_deletes(highest_int: u64) -> Result<(), Error> {
 	{
 		let db = DB::open(&random_file.path)?;
 		{
-			let mut tx = db.tx(true)?;
-			let mut b = tx.create_bucket("abc")?;
+			let tx = db.tx(true)?;
+			let b = tx.create_bucket("abc")?;
 			for i in 0..highest_int {
 				b.put(i.to_be_bytes(), i.to_string())?;
 			}
@@ -45,8 +45,8 @@ fn test_deletes(highest_int: u64) -> Result<(), Error> {
 
 		loop {
 			{
-				let mut tx = db.tx(true)?;
-				let mut b = tx.get_bucket("abc")?;
+				let tx = db.tx(true)?;
+				let b = tx.get_bucket("abc")?;
 				// delete between 0 and 100 random items
 				for _ in 0..rng.gen_range(10..=100) {
 					let i = id_iter.next();
@@ -77,7 +77,7 @@ fn test_deletes(highest_int: u64) -> Result<(), Error> {
 				tx.commit()?;
 			}
 			{
-				let mut tx = db.tx(true)?;
+				let tx = db.tx(true)?;
 				let b = tx.get_bucket("abc")?;
 				for i in 0..highest_int {
 					let data = b.get(i.to_be_bytes());
@@ -107,26 +107,26 @@ fn delete_simple_bucket() -> Result<(), Error> {
 	let random_file = common::RandomFile::new();
 	let db = DB::open(&random_file.path)?;
 	{
-		let mut tx = db.tx(true)?;
-		let mut b = tx.create_bucket("abc")?;
+		let tx = db.tx(true)?;
+		let b = tx.create_bucket("abc")?;
 		for i in 0..10_u64 {
 			b.put(i.to_be_bytes(), i.to_string())?;
 		}
 		tx.commit()?;
 	}
 	{
-		let mut tx = db.tx(true)?;
+		let tx = db.tx(true)?;
 		tx.delete_bucket("abc")?;
 		assert_eq!(tx.get_bucket("abc").err(), Some(Error::BucketMissing));
 		// delete a freshly created bucket
-		let mut b = tx.create_bucket("def")?;
+		let b = tx.create_bucket("def")?;
 		b.put("some", "data")?;
 		tx.delete_bucket("def")?;
 
 		tx.commit()?;
 	}
 	{
-		let mut tx = db.tx(false)?;
+		let tx = db.tx(false)?;
 		assert_eq!(tx.get_bucket("abc").err(), Some(Error::BucketMissing));
 		assert_eq!(tx.get_bucket("def").err(), Some(Error::BucketMissing));
 	}
@@ -138,10 +138,10 @@ fn delete_large_bucket_with_large_nested_buckets() -> Result<(), Error> {
 	let random_file = common::RandomFile::new();
 	let db = DB::open(&random_file.path)?;
 	{
-		let mut tx = db.tx(true)?;
-		let mut b = tx.create_bucket("abc")?;
+		let tx = db.tx(true)?;
+		let b = tx.create_bucket("abc")?;
 		for i in 0..50_u64 {
-			let mut sub_bucket = b.create_bucket(i.to_be_bytes())?;
+			let sub_bucket = b.create_bucket(i.to_be_bytes())?;
 			for i in 0..1000_u64 {
 				sub_bucket.put(i.to_be_bytes(), i.to_string().repeat(10))?;
 			}
@@ -149,13 +149,13 @@ fn delete_large_bucket_with_large_nested_buckets() -> Result<(), Error> {
 		tx.commit()?;
 	}
 	{
-		let mut tx = db.tx(true)?;
+		let tx = db.tx(true)?;
 		tx.delete_bucket("abc")?;
 		assert_eq!(tx.get_bucket("abc").err(), Some(Error::BucketMissing));
 		tx.commit()?;
 	}
 	{
-		let mut tx = db.tx(false)?;
+		let tx = db.tx(false)?;
 		assert_eq!(tx.get_bucket("abc").err(), Some(Error::BucketMissing));
 	}
 	db.check()

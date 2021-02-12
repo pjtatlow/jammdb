@@ -298,7 +298,7 @@ impl<'a> TransactionInner {
 		{
 			let root = self.root.as_mut().unwrap();
 			root.write(file)?;
-			self.meta.root = root.meta;
+			self.meta.root = root.meta();
 		}
 
 		// write freelist to file
@@ -487,14 +487,14 @@ mod tests {
 		let db = DB::open(&random_file)?;
 
 		{
-			let mut tx = db.tx(true)?;
+			let tx = db.tx(true)?;
 			assert!(tx.create_bucket("abc").is_ok());
 			tx.commit()?;
 		}
 
-		let mut tx = db.tx(false)?;
+		let tx = db.tx(false)?;
 		assert!(tx.create_bucket("def").is_err());
-		let mut b = tx.get_bucket("abc")?;
+		let b = tx.get_bucket("abc")?;
 		assert_eq!(b.put("key", "value"), Err(Error::ReadOnlyTx));
 		assert_eq!(b.delete("key"), Err(Error::ReadOnlyTx));
 		assert_eq!(b.create_bucket("dev").err(), Some(Error::ReadOnlyTx));
@@ -524,15 +524,15 @@ mod tests {
 			}
 			{
 				// create a writable transaction while the read-only transaction is still open
-				let mut tx = db.tx(true)?;
+				let tx = db.tx(true)?;
 				assert!(tx.file.is_some());
 				{
 					{
-						let mut inner = tx.inner.borrow_mut();
+						let inner = tx.inner.borrow_mut();
 						assert_eq!(inner.meta.tx_id, 1);
 						assert_eq!(inner.freelist.pages(), vec![]);
 					}
-					let mut b = tx.create_bucket("abc")?;
+					let b = tx.create_bucket("abc")?;
 					b.put("123", "456")?;
 				}
 				tx.commit()?;
@@ -547,7 +547,7 @@ mod tests {
 						assert_eq!(inner.meta.tx_id, 2);
 						assert_eq!(inner.freelist.pages(), vec![2, 3]);
 					}
-					let mut b = tx.get_bucket("abc")?;
+					let b = tx.get_bucket("abc")?;
 					b.put("123", "456")?;
 				}
 				tx.commit()?;
@@ -556,7 +556,7 @@ mod tests {
 		}
 		{
 			// make sure we can reuse the freelist
-			let mut tx = db.tx(true)?;
+			let tx = db.tx(true)?;
 			assert!(tx.file.is_some());
 			let mut inner = tx.inner.borrow_mut();
 			assert_eq!(inner.freelist.pages(), vec![2, 3, 4, 5, 6]);

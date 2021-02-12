@@ -165,10 +165,8 @@ impl Page {
 			Page::TYPE_BRANCH => {
 				for (i, elem) in self.branch_elements().iter().enumerate() {
 					let key = elem.key();
-					let elem_name = match std::str::from_utf8(key) {
-						// Ok(key) => format!("\"Index: {}\\nPage: {}\\nKey: '{}'\"", i, self.id, key),
-						_ => format!("\"Index: {}\\nPage: {}\\nKey: {:?}\"", i, self.id, key),
-					};
+					let elem_name =
+						format!("\"Index: {}\\nPage: {}\\nKey: {:?}\"", i, self.id, key);
 					let page = tx.page(elem.page);
 					println!("{} [style=\"filled\", fillcolor=\"burlywood\"];", elem_name);
 					println!("{} -> {}", name, elem_name);
@@ -186,16 +184,13 @@ impl Page {
 								SliceParts::from_slice(elem.value()),
 							);
 							let meta = bd.meta();
-							let elem_name = match std::str::from_utf8(elem.key()) {
-								// Ok(key) => format!("\"Index: {}\\nPage: {}\\nKey '{}'\\n {:?}\"", i, self.id, key, meta),
-								_ => format!(
-									"\"Index: {}\\nPage: {}\\nKey {:?}\\n {:?}\"",
-									i,
-									self.id,
-									elem.key(),
-									meta
-								),
-							};
+							let elem_name = format!(
+								"\"Index: {}\\nPage: {}\\nKey {:?}\\n {:?}\"",
+								i,
+								self.id,
+								elem.key(),
+								meta
+							);
 							println!("{} [style=\"filled\", fillcolor=\"gray91\"];", elem_name);
 							println!("{} -> {}", name, elem_name);
 							let page = tx.page(meta.root_page);

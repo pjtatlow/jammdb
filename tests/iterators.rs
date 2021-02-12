@@ -121,8 +121,8 @@ fn cursor_seek() -> Result<(), Error> {
 	{
 		let db = DB::open(&random_file.path)?;
 		{
-			let mut tx = db.tx(true)?;
-			let mut b = tx.create_bucket("abc")?;
+			let tx = db.tx(true)?;
+			let b = tx.create_bucket("abc")?;
 			{
 				let mut random_fruits = Vec::from(fruits.as_slice());
 				let mut rng = rand::thread_rng();
@@ -137,7 +137,7 @@ fn cursor_seek() -> Result<(), Error> {
 			tx.commit()?;
 		}
 		{
-			let mut tx = db.tx(false)?;
+			let tx = db.tx(false)?;
 			let b = tx.get_bucket("abc")?;
 			check_cursor_starts(&fruits, &b);
 		}
@@ -145,26 +145,26 @@ fn cursor_seek() -> Result<(), Error> {
 	{
 		let db = DB::open(&random_file.path)?;
 		{
-			let mut tx = db.tx(false)?;
+			let tx = db.tx(false)?;
 			let b = tx.get_bucket("abc")?;
 			check_cursor_starts(&fruits, &b);
 		}
 		{
-			let mut tx = db.tx(false)?;
+			let tx = db.tx(false)?;
 			let b = tx.get_bucket("abc")?;
 			println!("7 {} {:?}", fruits[7], &fruits[7..]);
 			check_cursor("bl", &fruits[6..], &b, 6);
 		}
 		{
-			let mut tx = db.tx(true)?;
-			let mut b = tx.get_bucket("abc")?;
+			let tx = db.tx(true)?;
+			let b = tx.get_bucket("abc")?;
 			b.put("zomato", fruits.len().to_string())?;
 			fruits.push("zomato");
 			check_cursor_starts(&fruits, &b);
 			tx.commit()?;
 		}
 		{
-			let mut tx = db.tx(false)?;
+			let tx = db.tx(false)?;
 			let mut b = tx.get_bucket("abc")?;
 			println!("7 {} {:?}", fruits[7], &fruits[7..]);
 			check_cursor("bl", &fruits[6..], &mut b, 6);

@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
 use std::mem::size_of;
 
-use crate::bucket::Bucket;
+use crate::bucket::BucketInner;
 use crate::cursor::PageNodeID;
 use crate::data::{Data, SliceParts};
 use crate::errors::Result;
@@ -21,7 +21,7 @@ pub(crate) struct Node {
 	pub(crate) id: NodeID,
 	pub(crate) page_id: PageID,
 	pub(crate) num_pages: u64,
-	bucket: Ptr<Bucket>,
+	bucket: Ptr<BucketInner>,
 	// pub (crate) key: SliceParts,
 	pub(crate) children: Vec<NodeID>,
 	pub(crate) data: NodeData,
@@ -113,7 +113,7 @@ impl Node {
 	pub(crate) const TYPE_DATA: NodeType = 0x00;
 	pub(crate) const TYPE_BUCKET: NodeType = 0x01;
 
-	pub(crate) fn new(id: NodeID, t: PageType, b: Ptr<Bucket>) -> Node {
+	pub(crate) fn new(id: NodeID, t: PageType, b: Ptr<BucketInner>) -> Node {
 		let data: NodeData = match t {
 			Page::TYPE_BRANCH => NodeData::Branches(Vec::new()),
 			Page::TYPE_LEAF => NodeData::Leaves(Vec::new()),
@@ -131,7 +131,7 @@ impl Node {
 		}
 	}
 
-	pub(crate) fn with_data(id: NodeID, data: NodeData, b: Ptr<Bucket>) -> Node {
+	pub(crate) fn with_data(id: NodeID, data: NodeData, b: Ptr<BucketInner>) -> Node {
 		let original_key = Some(data.key_parts());
 		Node {
 			id,
@@ -145,7 +145,7 @@ impl Node {
 		}
 	}
 
-	pub(crate) fn from_page(id: NodeID, b: Ptr<Bucket>, p: &Page) -> Node {
+	pub(crate) fn from_page(id: NodeID, b: Ptr<BucketInner>, p: &Page) -> Node {
 		let data: NodeData = match p.page_type {
 			Page::TYPE_BRANCH => {
 				let mut data = Vec::with_capacity(p.count as usize);

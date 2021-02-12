@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::bucket::Bucket;
+use crate::bucket::BucketInner;
 use crate::data::Data;
 use crate::node::{Node, NodeData, NodeID};
 use crate::page::{Page, PageID};
@@ -135,14 +135,14 @@ impl PageNode {
 /// # }
 /// ```
 pub struct Cursor<'a> {
-	bucket: Ptr<Bucket>,
+	bucket: Ptr<BucketInner>,
 	stack: Vec<Elem>,
 	next_called: bool,
 	_phantom: PhantomData<&'a ()>,
 }
 
 impl<'a> Cursor<'a> {
-	pub(crate) fn new(b: Ptr<Bucket>) -> Cursor<'a> {
+	pub(crate) fn new(b: Ptr<BucketInner>) -> Cursor<'a> {
 		Cursor {
 			bucket: b,
 			stack: vec![],

@@ -8,8 +8,8 @@ fn sibling_buckets() -> Result<(), Error> {
 	{
 		let db = DB::open(&random_file.path)?;
 		{
-			let mut tx = db.tx(true)?;
-			let mut b = tx.create_bucket("abc")?;
+			let tx = db.tx(true)?;
+			let b = tx.create_bucket("abc")?;
 			for i in 0..=10_u64 {
 				let existing = b.put(i.to_be_bytes(), i.to_string())?;
 				assert!(existing.is_none());
@@ -19,9 +19,9 @@ fn sibling_buckets() -> Result<(), Error> {
 			tx.commit()?;
 		}
 		{
-			let mut tx = db.tx(true)?;
+			let tx = db.tx(true)?;
 
-			let mut b = tx.get_bucket("abc")?;
+			let b = tx.get_bucket("abc")?;
 			check_data(&b, 11, 1, vec![]);
 			for i in 0..=10_u64 {
 				let existing = b.put(i.to_be_bytes(), i.to_string().repeat(4))?;
@@ -32,7 +32,7 @@ fn sibling_buckets() -> Result<(), Error> {
 			}
 			check_data(&b, 11, 4, vec![]);
 			assert_eq!(b.next_int(), 11);
-			let mut b2 = tx.create_bucket("def")?;
+			let b2 = tx.create_bucket("def")?;
 			for i in 0..=900_u64 {
 				b2.put(i.to_be_bytes(), i.to_string().repeat(2))?;
 			}
@@ -41,7 +41,7 @@ fn sibling_buckets() -> Result<(), Error> {
 			tx.commit()?;
 		}
 		{
-			let mut tx = db.tx(true)?;
+			let tx = db.tx(true)?;
 			let b = tx.get_bucket("abc")?;
 			check_data(&b, 11, 4, vec![]);
 			assert_eq!(b.next_int(), 11);
@@ -53,7 +53,7 @@ fn sibling_buckets() -> Result<(), Error> {
 	}
 	{
 		let db = DB::open(&random_file.path)?;
-		let mut tx = db.tx(true)?;
+		let tx = db.tx(true)?;
 		{
 			let b = tx.get_bucket("abc")?;
 			check_data(&b, 11, 4, vec![]);
@@ -73,22 +73,22 @@ fn nested_buckets() -> Result<(), Error> {
 	{
 		let db = DB::open(&random_file.path)?;
 		{
-			let mut tx = db.tx(true)?;
-			let mut b = tx.create_bucket("abc")?;
+			let tx = db.tx(true)?;
+			let b = tx.create_bucket("abc")?;
 			for i in 0..=10_u64 {
 				let existing = b.put(i.to_be_bytes(), i.to_string().repeat(2))?;
 				assert!(existing.is_none());
 			}
 			assert_eq!(b.next_int(), 11);
 			check_data(&b, 11, 2, vec![]);
-			let mut b = b.create_bucket("def")?;
+			let b = b.create_bucket("def")?;
 			for i in 0..=100_u64 {
 				let existing = b.put(i.to_be_bytes(), i.to_string().repeat(4))?;
 				assert!(existing.is_none());
 			}
 			assert_eq!(b.next_int(), 101);
 			check_data(&b, 101, 4, vec![]);
-			let mut b = b.create_bucket("ghi")?;
+			let b = b.create_bucket("ghi")?;
 			for i in 0..=1000_u64 {
 				let existing = b.put(i.to_be_bytes(), i.to_string().repeat(8))?;
 				assert!(existing.is_none());
@@ -98,13 +98,13 @@ fn nested_buckets() -> Result<(), Error> {
 			tx.commit()?;
 		}
 		{
-			let mut tx = db.tx(true)?;
+			let tx = db.tx(true)?;
 
-			let mut b = tx.get_bucket("abc")?;
+			let b = tx.get_bucket("abc")?;
 			check_data(&b, 12, 2, vec![Vec::from("def".as_bytes())]);
 			assert_eq!(b.next_int(), 12);
 
-			let mut b = b.get_bucket("def")?;
+			let b = b.get_bucket("def")?;
 			check_data(&b, 102, 4, vec![Vec::from("ghi".as_bytes())]);
 			assert_eq!(b.next_int(), 102);
 
