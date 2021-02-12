@@ -7,12 +7,17 @@ pub struct RandomFile {
 impl RandomFile {
 	pub fn new() -> RandomFile {
 		loop {
-			let filename: String = rand::thread_rng()
-				.sample_iter(&Alphanumeric)
-				.take(30)
-				.collect();
+			let filename: String = std::str::from_utf8(
+				rand::thread_rng()
+					.sample_iter(&Alphanumeric)
+					.take(30)
+					.collect::<Vec<u8>>()
+					.as_slice(),
+			)
+			.unwrap()
+			.into();
 			let path = std::env::temp_dir().join(filename);
-			if let Err(_) = path.metadata() {
+			if path.metadata().is_err() {
 				return RandomFile { path };
 			}
 		}

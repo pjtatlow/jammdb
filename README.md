@@ -53,7 +53,7 @@ use jammdb::{DB, Data, Error};
 fn main() -> Result<(), Error> {
 {
     // open a new database file
-    let mut db = DB::open("my-database.db")?;
+    let db = DB::open("my-database.db")?;
 
     // open a writable transaction so we can make changes
     let mut tx = db.tx(true)?;
@@ -68,7 +68,7 @@ fn main() -> Result<(), Error> {
 }
 {
     // open the existing database file
-    let mut db = DB::open("my-database.db")?;
+    let db = DB::open("my-database.db")?;
     // open a read-only transaction to get the data
     let mut tx = db.tx(true)?;
     // get the bucket we created in the last transaction
@@ -102,7 +102,7 @@ fn main() -> Result<(), Error> {
     };
 {
     // open a new database file and start a writable transaction
-    let mut db = DB::open("my-database.db")?;
+    let db = DB::open("my-database.db")?;
     let mut tx = db.tx(true)?;
 
     // create a bucket to store users
@@ -117,7 +117,7 @@ fn main() -> Result<(), Error> {
 }
 {
     // open the existing database file
-    let mut db = DB::open("my-database.db")?;
+    let db = DB::open("my-database.db")?;
     // open a read-only transaction to get the data
     let mut tx = db.tx(true)?;
     // get the bucket we created in the last transaction

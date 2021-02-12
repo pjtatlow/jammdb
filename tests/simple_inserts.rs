@@ -31,7 +31,7 @@ fn test_insert(mut values: Vec<u64>) -> Result<(), Error> {
 	let random_file = common::RandomFile::new();
 	let mut rng = rand::thread_rng();
 	{
-		let mut db = DB::open(&random_file.path)?;
+		let db = DB::open(&random_file.path)?;
 		{
 			let mut tx = db.tx(true)?;
 			let mut b = tx.create_bucket("abc")?;
@@ -55,7 +55,7 @@ fn test_insert(mut values: Vec<u64>) -> Result<(), Error> {
 		}
 	}
 	{
-		let mut db = DB::open(&random_file.path)?;
+		let db = DB::open(&random_file.path)?;
 		let mut tx = db.tx(false)?;
 		let b = tx.get_bucket("abc")?;
 		// check after re-opening file
@@ -64,7 +64,7 @@ fn test_insert(mut values: Vec<u64>) -> Result<(), Error> {
 		let missing_key = (values.len() + 1) as u64;
 		assert!(b.get(missing_key.to_be_bytes()).is_none());
 	}
-	let mut db = DB::open(&random_file.path)?;
+	let db = DB::open(&random_file.path)?;
 	db.check()
 }
 

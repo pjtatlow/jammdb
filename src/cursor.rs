@@ -111,7 +111,7 @@ impl PageNode {
 /// # use jammdb::Error;
 ///
 /// # fn main() -> Result<(), Error> {
-/// let mut db = DB::open("my.db")?;
+/// let db = DB::open("my.db")?;
 /// let mut tx = db.tx(false)?;
 /// let bucket = tx.get_bucket("my-bucket")?;
 ///

@@ -18,7 +18,7 @@ use crate::page::LeafElement;
 /// # use jammdb::Error;
 ///
 /// # fn main() -> Result<(), Error> {
-/// let mut db = DB::open("my.db")?;
+/// let db = DB::open("my.db")?;
 /// let mut tx = db.tx(true)?;
 /// let bucket = tx.create_bucket("my-bucket")?;
 ///
@@ -104,7 +104,7 @@ impl Data {
 /// # use jammdb::Error;
 ///
 /// # fn main() -> Result<(), Error> {
-/// let mut db = DB::open("my.db")?;
+/// let db = DB::open("my.db")?;
 /// let mut tx = db.tx(true)?;
 /// let mut bucket = tx.create_bucket("my-bucket")?;
 ///
@@ -174,7 +174,7 @@ impl BucketData {
 /// # use jammdb::Error;
 ///
 /// # fn main() -> Result<(), Error> {
-/// let mut db = DB::open("my.db")?;
+/// let db = DB::open("my.db")?;
 /// let mut tx = db.tx(false)?;
 /// let mut bucket = tx.get_bucket("my-bucket")?;
 ///

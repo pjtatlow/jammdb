@@ -31,7 +31,7 @@
 //! fn main() -> Result<(), Error> {
 //! {
 //!     // open a new database file
-//!     let mut db = DB::open("my-database.db")?;
+//!     let db = DB::open("my-database.db")?;
 //!
 //!     // open a writable transaction so we can make changes
 //!     let mut tx = db.tx(true)?;
@@ -46,7 +46,7 @@
 //! }
 //! {
 //!     // open the existing database file
-//!     let mut db = DB::open("my-database.db")?;
+//!     let db = DB::open("my-database.db")?;
 //!     // open a read-only transaction to get the data
 //!     let mut tx = db.tx(true)?;
 //!     // get the bucket we created in the last transaction
@@ -80,7 +80,7 @@
 //!     };
 //! {
 //!     // open a new database file and start a writable transaction
-//!     let mut db = DB::open("my-database.db")?;
+//!     let db = DB::open("my-database.db")?;
 //!     let mut tx = db.tx(true)?;
 //!
 //!     // create a bucket to store users
@@ -95,7 +95,7 @@
 //! }
 //! {
 //!     // open the existing database file
-//!     let mut db = DB::open("my-database.db")?;
+//!     let db = DB::open("my-database.db")?;
 //!     // open a read-only transaction to get the data
 //!     let mut tx = db.tx(true)?;
 //!     // get the bucket we created in the last transaction
@@ -145,10 +145,15 @@ mod testutil {
 	impl RandomFile {
 		pub fn new() -> RandomFile {
 			loop {
-				let filename: String = rand::thread_rng()
-					.sample_iter(&Alphanumeric)
-					.take(30)
-					.collect();
+				let filename: String = std::str::from_utf8(
+					rand::thread_rng()
+						.sample_iter(&Alphanumeric)
+						.take(30)
+						.collect::<Vec<u8>>()
+						.as_slice(),
+				)
+				.unwrap()
+				.into();
 				let path = std::env::temp_dir().join(filename);
 				if path.metadata().is_err() {
 					return RandomFile { path };

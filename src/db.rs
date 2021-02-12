@@ -35,7 +35,7 @@ const DEFAULT_NUM_PAGES: usize = 32;
 /// # use jammdb::Error;
 ///
 /// # fn main() -> Result<(), Error> {
-/// let mut db = OpenOptions::new()
+/// let db = OpenOptions::new()
 ///     .pagesize(4096)
 ///     .num_pages(32)
 ///     .open("my.db")?;
@@ -149,7 +149,7 @@ impl DB {
 	/// # use jammdb::Error;
 	///
 	/// # fn main() -> Result<(), Error> {
-	/// let mut db = DB::open("my.db")?;
+	/// let db = DB::open("my.db")?;
 	///
 	/// // do whatever you want with the DB
 	/// # Ok(())
@@ -162,7 +162,7 @@ impl DB {
 	/// Creates a [`Transaction`].
 	/// This transaction is either read-only or writable depending on the `writable` parameter.
 	/// Please read the docs on a [`Transaction`] for more details.
-	pub fn tx(&mut self, writable: bool) -> Result<Transaction> {
+	pub fn tx(&self, writable: bool) -> Result<Transaction> {
 		Transaction::new(&self.0, writable)
 	}
 
@@ -172,7 +172,7 @@ impl DB {
 	}
 
 	#[doc(hidden)]
-	pub fn check(&mut self) -> Result<()> {
+	pub fn check(&self) -> Result<()> {
 		let tx = self.tx(false)?;
 		tx.check()
 	}

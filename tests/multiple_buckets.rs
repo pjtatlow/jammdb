@@ -6,7 +6,7 @@ mod common;
 fn sibling_buckets() -> Result<(), Error> {
 	let random_file = common::RandomFile::new();
 	{
-		let mut db = DB::open(&random_file.path)?;
+		let db = DB::open(&random_file.path)?;
 		{
 			let mut tx = db.tx(true)?;
 			let mut b = tx.create_bucket("abc")?;
@@ -52,7 +52,7 @@ fn sibling_buckets() -> Result<(), Error> {
 		}
 	}
 	{
-		let mut db = DB::open(&random_file.path)?;
+		let db = DB::open(&random_file.path)?;
 		let mut tx = db.tx(true)?;
 		{
 			let b = tx.get_bucket("abc")?;
@@ -63,7 +63,7 @@ fn sibling_buckets() -> Result<(), Error> {
 			check_data(&b2, 901, 2, vec![]);
 		}
 	}
-	let mut db = DB::open(&random_file.path)?;
+	let db = DB::open(&random_file.path)?;
 	db.check()
 }
 
@@ -71,7 +71,7 @@ fn sibling_buckets() -> Result<(), Error> {
 fn nested_buckets() -> Result<(), Error> {
 	let random_file = common::RandomFile::new();
 	{
-		let mut db = DB::open(&random_file.path)?;
+		let db = DB::open(&random_file.path)?;
 		{
 			let mut tx = db.tx(true)?;
 			let mut b = tx.create_bucket("abc")?;
@@ -115,7 +115,7 @@ fn nested_buckets() -> Result<(), Error> {
 			tx.commit()?;
 		}
 	}
-	let mut db = DB::open(&random_file.path)?;
+	let db = DB::open(&random_file.path)?;
 	db.check()
 }
 

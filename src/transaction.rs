@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
 use std::pin::Pin;
@@ -40,14 +41,9 @@ use crate::ptr::Ptr;
 /// # use jammdb::Error;
 ///
 /// # fn main() -> Result<(), Error> {
-/// # let mut db = DB::open("my.db")?;
-/// # // note that only one tx can be opened from each copy of the DB, so we clone it here for the example
-/// # let mut db2 = db.clone();
+/// # let db = DB::open("my.db")?;
 /// // create a read-only transaction
 /// let mut tx1 = db.tx(false)?;
-///
-/// # // hide the clone for this example
-/// # let mut db = db2;
 /// // create a writable transcation
 /// let mut tx2 = db.tx(true)?;
 ///
@@ -81,7 +77,7 @@ use crate::ptr::Ptr;
 /// reclaiming old pages and your database may increase in disk size quickly if you're writing lots of data,
 /// so it's a good idea to keep transactions short.
 pub struct Transaction<'a> {
-	inner: Pin<Box<TransactionInner>>,
+	inner: RefCell<Pin<Box<TransactionInner>>>,
 	file: Option<MutexGuard<'a, File>>,
 }
 
@@ -95,6 +91,7 @@ impl<'a> Transaction<'a> {
 		let tx = TransactionInner::new(db, writable)?;
 		let mut inner = Pin::new(Box::new(tx));
 		inner.init();
+		let inner = RefCell::new(inner);
 		Ok(Transaction { inner, file })
 	}
 
@@ -106,8 +103,11 @@ impl<'a> Transaction<'a> {
 	/// or an [`IncompatibleValue`](enum.Error.html#variant.IncompatibleValue) error if the key exists but is not a bucket.
 	///
 	/// In a read-only transaction, you will get an error when trying to use any of the bucket's methods that modify data.
-	pub fn get_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<BucketRef> {
-		self.inner.get_bucket(name.as_ref())
+	pub fn get_bucket<T: AsRef<[u8]>>(&'a self, name: T) -> Result<BucketRef> {
+		let mut inner = self.inner.borrow_mut();
+		Ok(BucketRef::new(unsafe {
+			&*inner.get_bucket(name.as_ref())?
+		}))
 	}
 
 	/// Creates a new bucket with the given name and returns a reference it.
@@ -117,8 +117,11 @@ impl<'a> Transaction<'a> {
 	/// Will return a [`BucketExists`](enum.Error.html#variant.BucketExists) error if the bucket already exists,
 	/// an [`IncompatibleValue`](enum.Error.html#variant.IncompatibleValue) error if the key exists but is not a bucket,
 	/// or a [`ReadOnlyTx`](enum.Error.html#variant.ReadOnlyTx) error if this is called on a read-only transaction.
-	pub fn create_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<BucketRef> {
-		self.inner.create_bucket(name.as_ref())
+	pub fn create_bucket<T: AsRef<[u8]>>(&'a self, name: T) -> Result<BucketRef> {
+		let mut inner = self.inner.borrow_mut();
+		Ok(BucketRef::new(unsafe {
+			&*inner.create_bucket(name.as_ref())?
+		}))
 	}
 
 	/// Creates an existing root-level bucket with the given name if it does not already exist.
@@ -128,8 +131,11 @@ impl<'a> Transaction<'a> {
 	///
 	/// Will return an [`IncompatibleValue`](enum.Error.html#variant.IncompatibleValue) error if the key exists but is not a bucket,
 	/// or a [`ReadOnlyTx`](enum.Error.html#variant.ReadOnlyTx) error if this is called on a read-only transaction.
-	pub fn get_or_create_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<BucketRef> {
-		self.inner.get_or_create_bucket(name.as_ref())
+	pub fn get_or_create_bucket<T: AsRef<[u8]>>(&self, name: T) -> Result<BucketRef> {
+		let mut inner = self.inner.borrow_mut();
+		Ok(BucketRef::new(unsafe {
+			&*inner.get_or_create_bucket(name.as_ref())?
+		}))
 	}
 
 	/// Deletes an existing root-level bucket with the given name
@@ -139,8 +145,8 @@ impl<'a> Transaction<'a> {
 	/// Will return a [`BucketMissing`](enum.Error.html#variant.BucketMissing) error if the bucket does not exist,
 	/// an [`IncompatibleValue`](enum.Error.html#variant.IncompatibleValue) error if the key exists but is not a bucket,
 	/// or a [`ReadOnlyTx`](enum.Error.html#variant.ReadOnlyTx) error if this is called on a read-only transaction.
-	pub fn delete_bucket<T: AsRef<[u8]>>(&mut self, name: T) -> Result<()> {
-		self.inner.delete_bucket(name.as_ref())
+	pub fn delete_bucket<T: AsRef<[u8]>>(&self, name: T) -> Result<()> {
+		self.inner.borrow_mut().delete_bucket(name.as_ref())
 	}
 
 	/// Writes the changes made in the writeable transaction to the underlying file.
@@ -150,23 +156,24 @@ impl<'a> Transaction<'a> {
 	/// Will return an [`IOError`](enum.Error.html#variant.IOError) error if there are any io errors while writing to disk,
 	/// or a [`ReadOnlyTx`](enum.Error.html#variant.ReadOnlyTx) error if this is called on a read-only transaction.
 	pub fn commit(mut self) -> Result<()> {
-		if !self.inner.writable {
+		let mut inner = self.inner.borrow_mut();
+		if !inner.writable {
 			return Err(Error::ReadOnlyTx);
 		}
-		self.inner.rebalance()?;
-		self.inner.write_data(&mut self.file.as_mut().unwrap())
+		inner.rebalance()?;
+		inner.write_data(&mut self.file.as_mut().unwrap())
 	}
 
 	#[doc(hidden)]
 	#[cfg_attr(tarpaulin, skip)]
 	pub fn print_graph(&self) {
 		println!("digraph G {{");
-		self.inner.root.as_ref().unwrap().print();
+		self.inner.borrow_mut().root.as_ref().unwrap().print();
 		println!("}}");
 	}
 
 	pub(crate) fn check(&self) -> Result<()> {
-		self.inner.check()
+		self.inner.borrow_mut().check()
 	}
 }
 
@@ -223,19 +230,19 @@ impl<'a> TransactionInner {
 		Page::from_buf(&self.data, id, self.db.pagesize)
 	}
 
-	fn get_bucket(&'a mut self, name: &[u8]) -> Result<BucketRef> {
+	fn get_bucket(&mut self, name: &[u8]) -> Result<*const Bucket> {
 		let root = self.root.as_mut().unwrap();
-		root.get_bucket(name)
+		Ok(&*root.get_bucket(name)?)
 	}
 
-	fn get_or_create_bucket(&'a mut self, name: &[u8]) -> Result<BucketRef> {
+	fn get_or_create_bucket(&mut self, name: &[u8]) -> Result<*const Bucket> {
 		let root = self.root.as_mut().unwrap();
-		root.get_or_create_bucket(name)
+		Ok(&*root.get_or_create_bucket(name)?)
 	}
 
-	fn create_bucket(&'a mut self, name: &[u8]) -> Result<BucketRef> {
+	fn create_bucket(&mut self, name: &[u8]) -> Result<*const Bucket> {
 		let root = self.root.as_mut().unwrap();
-		root.create_bucket(name)
+		Ok(&*root.create_bucket(name)?)
 	}
 
 	fn delete_bucket(&mut self, name: &[u8]) -> Result<()> {
@@ -477,7 +484,7 @@ mod tests {
 	#[test]
 	fn test_ro_txs() -> Result<()> {
 		let random_file = RandomFile::new();
-		let mut db = DB::open(&random_file)?;
+		let db = DB::open(&random_file)?;
 
 		{
 			let mut tx = db.tx(true)?;
@@ -499,16 +506,15 @@ mod tests {
 	#[test]
 	fn test_concurrent_txs() -> Result<()> {
 		let random_file = RandomFile::new();
-		let mut db = OpenOptions::new()
+		let db = OpenOptions::new()
 			.pagesize(1024)
 			.num_pages(4)
 			.open(&random_file)?;
 		{
 			// create a read-only tx
-			let mut db_clone = db.clone();
-			let tx = db_clone.tx(false)?;
+			let tx = db.tx(false)?;
 			assert!(tx.file.is_none());
-			let tx: &TransactionInner = &tx.inner;
+			let tx = tx.inner.borrow_mut();
 			assert_eq!(tx.data.len(), 1024 * 4);
 			assert!(tx.root.is_some());
 			{
@@ -518,24 +524,32 @@ mod tests {
 			}
 			{
 				// create a writable transaction while the read-only transaction is still open
-				let mut db_clone = db.clone();
-				let mut tx = db_clone.tx(true)?;
+				let mut tx = db.tx(true)?;
 				assert!(tx.file.is_some());
-				assert_eq!(tx.inner.meta.tx_id, 1);
-				assert_eq!(tx.inner.freelist.pages(), vec![]);
-				let mut b = tx.create_bucket("abc")?;
-				b.put("123", "456")?;
+				{
+					{
+						let mut inner = tx.inner.borrow_mut();
+						assert_eq!(inner.meta.tx_id, 1);
+						assert_eq!(inner.freelist.pages(), vec![]);
+					}
+					let mut b = tx.create_bucket("abc")?;
+					b.put("123", "456")?;
+				}
 				tx.commit()?;
 			}
 			{
 				// create a second writable transaction while the read-only transaction is still open
-				let mut db_clone = db.clone();
-				let mut tx = db_clone.tx(true)?;
+				let tx = db.tx(true)?;
 				assert!(tx.file.is_some());
-				assert_eq!(tx.inner.meta.tx_id, 2);
-				assert_eq!(tx.inner.freelist.pages(), vec![2, 3]);
-				let mut b = tx.get_bucket("abc")?;
-				b.put("123", "456")?;
+				{
+					{
+						let inner = tx.inner.borrow_mut();
+						assert_eq!(inner.meta.tx_id, 2);
+						assert_eq!(inner.freelist.pages(), vec![2, 3]);
+					}
+					let mut b = tx.get_bucket("abc")?;
+					b.put("123", "456")?;
+				}
 				tx.commit()?;
 			}
 			// let the read-only tx drop
@@ -544,19 +558,20 @@ mod tests {
 			// make sure we can reuse the freelist
 			let mut tx = db.tx(true)?;
 			assert!(tx.file.is_some());
-			assert_eq!(tx.inner.freelist.pages(), vec![2, 3, 4, 5, 6]);
+			let mut inner = tx.inner.borrow_mut();
+			assert_eq!(inner.freelist.pages(), vec![2, 3, 4, 5, 6]);
 			// allocate some pages from the freelist
-			assert_eq!(tx.inner.meta.num_pages, 10);
-			assert_eq!(tx.inner.allocate(1), (2, 1));
-			assert_eq!(tx.inner.allocate(1), (3, 1));
-			assert_eq!(tx.inner.allocate(1), (4, 1));
-			assert_eq!(tx.inner.allocate(1), (5, 1));
-			assert_eq!(tx.inner.allocate(1), (6, 1));
+			assert_eq!(inner.meta.num_pages, 10);
+			assert_eq!(inner.allocate(1), (2, 1));
+			assert_eq!(inner.allocate(1), (3, 1));
+			assert_eq!(inner.allocate(1), (4, 1));
+			assert_eq!(inner.allocate(1), (5, 1));
+			assert_eq!(inner.allocate(1), (6, 1));
 			// freelist should be empty so make sure the page is new
-			assert_eq!(tx.inner.meta.num_pages, 10);
-			assert_eq!(tx.inner.allocate(1), (10, 1));
-			assert_eq!(tx.inner.meta.num_pages, 11);
-			assert_eq!(tx.inner.freelist.pages(), vec![]);
+			assert_eq!(inner.meta.num_pages, 10);
+			assert_eq!(inner.allocate(1), (10, 1));
+			assert_eq!(inner.meta.num_pages, 11);
+			assert_eq!(inner.freelist.pages(), vec![]);
 		}
 		Ok(())
 	}
@@ -564,12 +579,12 @@ mod tests {
 	#[test]
 	fn test_allocate_no_freelist() -> Result<()> {
 		let random_file = RandomFile::new();
-		let mut db = OpenOptions::new()
+		let db = OpenOptions::new()
 			.pagesize(1024)
 			.num_pages(4)
 			.open(&random_file)?;
 		let tx = db.tx(false)?;
-		let mut tx = tx.inner;
+		let mut tx = tx.inner.borrow_mut();
 		// make sure we have an empty freelist and only four pages
 		assert_eq!(tx.freelist.pages().len(), 0);
 		assert_eq!(tx.meta.num_pages, 4);
@@ -587,12 +602,12 @@ mod tests {
 	#[test]
 	fn test_allocate_freelist() -> Result<()> {
 		let random_file = RandomFile::new();
-		let mut db = OpenOptions::new()
+		let db = OpenOptions::new()
 			.pagesize(1024)
 			.num_pages(100)
 			.open(&random_file)?;
 		let tx = db.tx(false)?;
-		let mut tx = tx.inner;
+		let mut tx = tx.inner.borrow_mut();
 
 		// setup the freelist and num_pages to simulate a used database
 		for page in [10_u64, 11, 13, 14, 15].iter() {
@@ -615,12 +630,12 @@ mod tests {
 	#[test]
 	fn test_free() -> Result<()> {
 		let random_file = RandomFile::new();
-		let mut db = OpenOptions::new()
+		let db = OpenOptions::new()
 			.pagesize(1024)
 			.num_pages(100)
 			.open(&random_file)?;
 		let tx = db.tx(false)?;
-		let mut tx = tx.inner;
+		let mut tx = tx.inner.borrow_mut();
 
 		assert_eq!(tx.meta.tx_id, 0);
 		assert_eq!(tx.freelist.pages().len(), 0);
@@ -635,12 +650,12 @@ mod tests {
 	#[test]
 	fn test_copy_data() -> Result<()> {
 		let random_file = RandomFile::new();
-		let mut db = OpenOptions::new()
+		let db = OpenOptions::new()
 			.pagesize(1024)
 			.num_pages(100)
 			.open(&random_file)?;
 		let tx = db.tx(false)?;
-		let mut tx = tx.inner;
+		let mut tx = tx.inner.borrow_mut();
 
 		let data = vec![1, 2, 3];
 		let parts = tx.copy_data(&data);

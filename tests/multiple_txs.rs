@@ -5,11 +5,10 @@ mod common;
 #[test]
 fn tx_isolation() -> Result<(), Error> {
 	let random_file = common::RandomFile::new();
-	let mut db = DB::open(&random_file.path)?;
-	let mut db2 = db.clone();
+	let db = DB::open(&random_file.path)?;
 	{
 		let mut ro_tx = db.tx(false)?;
-		let mut wr_tx = db2.tx(true)?;
+		let mut wr_tx = db.tx(true)?;
 		let mut b = wr_tx.create_bucket("abc123")?;
 
 		for i in 0..=10_u64 {
@@ -32,7 +31,7 @@ fn tx_isolation() -> Result<(), Error> {
 		let mut ro_tx = db.tx(false)?;
 		let ro_b = ro_tx.get_bucket("abc123")?;
 		check_data(&ro_b, 11, 1);
-		let mut rw_tx = db2.tx(true)?;
+		let mut rw_tx = db.tx(true)?;
 		let mut rw_b = rw_tx.get_bucket("abc123")?;
 		check_data(&rw_b, 11, 1);
 		assert_eq!(ro_b.next_int(), 11);

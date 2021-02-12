@@ -30,7 +30,7 @@ fn test_deletes(highest_int: u64) -> Result<(), Error> {
 	let mut deleted = HashSet::new();
 	let mut rng = rand::thread_rng();
 	{
-		let mut db = DB::open(&random_file.path)?;
+		let db = DB::open(&random_file.path)?;
 		{
 			let mut tx = db.tx(true)?;
 			let mut b = tx.create_bucket("abc")?;
@@ -48,7 +48,7 @@ fn test_deletes(highest_int: u64) -> Result<(), Error> {
 				let mut tx = db.tx(true)?;
 				let mut b = tx.get_bucket("abc")?;
 				// delete between 0 and 100 random items
-				for _ in 0..rng.gen_range(10, 100) {
+				for _ in 0..rng.gen_range(10..=100) {
 					let i = id_iter.next();
 					if i.is_none() {
 						break;
@@ -105,7 +105,7 @@ fn test_deletes(highest_int: u64) -> Result<(), Error> {
 #[test]
 fn delete_simple_bucket() -> Result<(), Error> {
 	let random_file = common::RandomFile::new();
-	let mut db = DB::open(&random_file.path)?;
+	let db = DB::open(&random_file.path)?;
 	{
 		let mut tx = db.tx(true)?;
 		let mut b = tx.create_bucket("abc")?;
@@ -136,7 +136,7 @@ fn delete_simple_bucket() -> Result<(), Error> {
 #[test]
 fn delete_large_bucket_with_large_nested_buckets() -> Result<(), Error> {
 	let random_file = common::RandomFile::new();
-	let mut db = DB::open(&random_file.path)?;
+	let db = DB::open(&random_file.path)?;
 	{
 		let mut tx = db.tx(true)?;
 		let mut b = tx.create_bucket("abc")?;

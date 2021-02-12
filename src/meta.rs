@@ -29,8 +29,8 @@ impl Meta {
 	pub(crate) fn hash_self(&self) -> [u8; 32] {
 		let mut hash_result: [u8; 32] = [0; 32];
 		let mut hasher = Sha3_256::new();
-		hasher.input(self.bytes());
-		let hash = hasher.result();
+		hasher.update(self.bytes());
+		let hash = hasher.finalize();
 		hash_result.copy_from_slice(&hash[..]);
 		hash_result
 	}

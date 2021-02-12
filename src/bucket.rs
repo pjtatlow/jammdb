@@ -33,7 +33,7 @@ use crate::transaction::TransactionInner;
 /// # use jammdb::Error;
 ///
 /// # fn main() -> Result<(), Error> {
-/// let mut db = DB::open("my.db")?;
+/// let db = DB::open("my.db")?;
 /// let mut tx = db.tx(true)?;
 ///
 /// // create a root-level bucket
@@ -137,7 +137,7 @@ impl Bucket {
 	/// # use jammdb::Error;
 	///
 	/// # fn main() -> Result<(), Error> {
-	/// let mut db = DB::open("my.db")?;
+	/// let db = DB::open("my.db")?;
 	/// let mut tx = db.tx(false)?;
 	///
 	/// // get a root-level bucket
@@ -169,7 +169,7 @@ impl Bucket {
 	/// # use jammdb::Error;
 	///
 	/// # fn main() -> Result<(), Error> {
-	/// let mut db = DB::open("my.db")?;
+	/// let db = DB::open("my.db")?;
 	/// let mut tx = db.tx(true)?;
 	///
 	/// // create a root-level bucket
@@ -203,7 +203,7 @@ impl Bucket {
 	/// # use jammdb::Error;
 	///
 	/// # fn main() -> Result<(), Error> {
-	/// let mut db = DB::open("my.db")?;
+	/// let db = DB::open("my.db")?;
 	/// {
 	///     let mut tx = db.tx(true)?;
 	///     // create a root-level bucket
@@ -289,7 +289,7 @@ impl Bucket {
 	/// # use jammdb::Error;
 	///
 	/// # fn main() -> Result<(), Error> {
-	/// let mut db = DB::open("my.db")?;
+	/// let db = DB::open("my.db")?;
 	/// let mut tx = db.tx(true)?;
 	///
 	/// // get a root-level bucket
@@ -373,7 +373,7 @@ impl Bucket {
 	/// # use jammdb::Error;
 	///
 	/// # fn main() -> Result<(), Error> {
-	/// let mut db = DB::open("my.db")?;
+	/// let db = DB::open("my.db")?;
 	/// let mut tx = db.tx(true)?;
 	///
 	/// // create a root-level bucket
@@ -413,7 +413,7 @@ impl Bucket {
 	/// # use jammdb::Error;
 	///
 	/// # fn main() -> Result<(), Error> {
-	/// let mut db = DB::open("my.db")?;
+	/// let db = DB::open("my.db")?;
 	/// let mut tx = db.tx(false)?;
 	///
 	/// let bucket = tx.get_bucket("my-bucket")?;
@@ -452,7 +452,7 @@ impl Bucket {
 	/// # use jammdb::Error;
 	///
 	/// # fn main() -> Result<(), Error> {
-	/// let mut db = DB::open("my.db")?;
+	/// let db = DB::open("my.db")?;
 	/// let mut tx = db.tx(false)?;
 	///
 	/// let mut bucket = tx.get_bucket("my-bucket")?;
@@ -485,7 +485,7 @@ impl Bucket {
 	/// # use jammdb::Error;
 	///
 	/// # fn main() -> Result<(), Error> {
-	/// let mut db = DB::open("my.db")?;
+	/// let db = DB::open("my.db")?;
 	/// let mut tx = db.tx(true)?;
 	///
 	/// // create a root-level bucket
@@ -532,7 +532,7 @@ impl Bucket {
 	/// # use jammdb::Error;
 	///
 	/// # fn main() -> Result<(), Error> {
-	/// let mut db = DB::open("my.db")?;
+	/// let db = DB::open("my.db")?;
 	/// let mut tx = db.tx(false)?;
 	///
 	/// let mut bucket = tx.get_bucket("my-bucket")?;
@@ -601,7 +601,7 @@ impl Bucket {
 	/// # use jammdb::Error;
 	///
 	/// # fn main() -> Result<(), Error> {
-	/// let mut db = DB::open("my.db")?;
+	/// let db = DB::open("my.db")?;
 	/// let mut tx = db.tx(false)?;
 	///
 	/// let bucket = tx.get_bucket("my-bucket")?;
@@ -741,7 +741,7 @@ pub struct BucketRef<'a> {
 }
 
 impl<'a> BucketRef<'a> {
-	fn new(b: &Bucket) -> BucketRef {
+	pub(crate) fn new(b: &Bucket) -> BucketRef {
 		BucketRef {
 			bucket: b as *const Bucket,
 			_phantom: PhantomData {},
@@ -789,7 +789,7 @@ mod tests {
 	#[test]
 	fn test_incompatible_values() -> Result<()> {
 		let random_file = RandomFile::new();
-		let mut db = DB::open(&random_file)?;
+		let db = DB::open(&random_file)?;
 		{
 			let mut tx = db.tx(true)?;
 			assert_eq!(tx.get_bucket("abc").err(), Some(Error::BucketMissing));
@@ -824,7 +824,7 @@ mod tests {
 	#[test]
 	fn test_get_kv() -> Result<()> {
 		let random_file = RandomFile::new();
-		let mut db = DB::open(&random_file)?;
+		let db = DB::open(&random_file)?;
 		{
 			let mut tx = db.tx(true)?;
 			let mut b = tx.create_bucket("abc")?;
