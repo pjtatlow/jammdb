@@ -11,14 +11,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
       - name: Build
-        run: cargo build --verbose
+      - uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
       - name: Run tests
         run: cargo test --verbose
 
-      - name: rust-tarpaulin
-        uses: actions-rs/tarpaulin@v0.1.0
+      - name: Run cargo-tarpaulin
+        uses: actions-rs/tarpaulin@v0.1
+        with:
+          version: "0.15.0"
+          args: "-- --test-threads 1"
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1.0.2
