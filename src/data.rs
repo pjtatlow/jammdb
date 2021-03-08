@@ -10,49 +10,49 @@ use crate::page::LeafElement;
 
 /// A wrapper around data to ensure it is used before a bucket goes out of scope
 pub struct Ref<'a, T> {
-	inner: T,
-	_phantom: PhantomData<&'a ()>,
+    inner: T,
+    _phantom: PhantomData<&'a ()>,
 }
 
 impl<'a, T> Ref<'a, T> {
-	pub(crate) fn new(inner: T) -> Ref<'a, T> {
-		Ref {
-			inner,
-			_phantom: PhantomData {},
-		}
-	}
+    pub(crate) fn new(inner: T) -> Ref<'a, T> {
+        Ref {
+            inner,
+            _phantom: PhantomData {},
+        }
+    }
 }
 
 impl<'a, T> Deref for Ref<'a, T> {
-	type Target = T;
+    type Target = T;
 
-	fn deref(&self) -> &Self::Target {
-		&self.inner
-	}
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
 
 impl<'a, T: fmt::Debug> fmt::Debug for Ref<'a, T> {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		self.inner.fmt(f)
-	}
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner.fmt(f)
+    }
 }
 
 impl<'a, T: Ord> Ord for Ref<'a, T> {
-	fn cmp(&self, other: &Self) -> Ordering {
-		self.inner.cmp(other)
-	}
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.inner.cmp(other)
+    }
 }
 
 impl<'a, T: PartialOrd> PartialOrd for Ref<'a, T> {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		self.inner.partial_cmp(other)
-	}
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.inner.partial_cmp(other)
+    }
 }
 
 impl<'a, T: PartialEq> PartialEq for Ref<'a, T> {
-	fn eq(&self, other: &Self) -> bool {
-		self.inner.eq(other)
-	}
+    fn eq(&self, other: &Self) -> bool {
+        self.inner.eq(other)
+    }
 }
 
 impl<'a, T: Eq> Eq for Ref<'a, T> {}
@@ -84,70 +84,70 @@ impl<'a, T: Eq> Eq for Ref<'a, T> {}
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 pub enum Data {
-	/// Contains data about a nested bucket
-	Bucket(BucketData),
-	/// a key / value pair of bytes
-	KeyValue(KVPair),
+    /// Contains data about a nested bucket
+    Bucket(BucketData),
+    /// a key / value pair of bytes
+    KeyValue(KVPair),
 }
 
 impl Data {
-	pub(crate) fn from_leaf(l: &LeafElement) -> Data {
-		match l.node_type {
-			Node::TYPE_DATA => Data::KeyValue(KVPair::new(l.key(), l.value())),
-			Node::TYPE_BUCKET => Data::Bucket(BucketData::new(l.key(), l.value())),
-			_ => panic!("INVALID NODE TYPE"),
-		}
-	}
+    pub(crate) fn from_leaf(l: &LeafElement) -> Data {
+        match l.node_type {
+            Node::TYPE_DATA => Data::KeyValue(KVPair::new(l.key(), l.value())),
+            Node::TYPE_BUCKET => Data::Bucket(BucketData::new(l.key(), l.value())),
+            _ => panic!("INVALID NODE TYPE"),
+        }
+    }
 
-	pub(crate) fn node_type(&self) -> NodeType {
-		match self {
-			Data::Bucket(_) => Node::TYPE_BUCKET,
-			Data::KeyValue(_) => Node::TYPE_DATA,
-		}
-	}
+    pub(crate) fn node_type(&self) -> NodeType {
+        match self {
+            Data::Bucket(_) => Node::TYPE_BUCKET,
+            Data::KeyValue(_) => Node::TYPE_DATA,
+        }
+    }
 
-	pub(crate) fn key_parts(&self) -> SliceParts {
-		match self {
-			Data::Bucket(b) => b.name,
-			Data::KeyValue(kv) => kv.key,
-		}
-	}
+    pub(crate) fn key_parts(&self) -> SliceParts {
+        match self {
+            Data::Bucket(b) => b.name,
+            Data::KeyValue(kv) => kv.key,
+        }
+    }
 
-	pub(crate) fn key(&self) -> &[u8] {
-		match self {
-			Data::Bucket(b) => b.name(),
-			Data::KeyValue(kv) => kv.key(),
-		}
-	}
+    pub(crate) fn key(&self) -> &[u8] {
+        match self {
+            Data::Bucket(b) => b.name(),
+            Data::KeyValue(kv) => kv.key(),
+        }
+    }
 
-	pub(crate) fn value(&self) -> &[u8] {
-		match self {
-			Data::Bucket(b) => b.meta.slice(),
-			Data::KeyValue(kv) => kv.value(),
-		}
-	}
+    pub(crate) fn value(&self) -> &[u8] {
+        match self {
+            Data::Bucket(b) => b.meta.slice(),
+            Data::KeyValue(kv) => kv.value(),
+        }
+    }
 
-	pub(crate) fn size(&self) -> u64 {
-		match self {
-			Data::Bucket(b) => b.size(),
-			Data::KeyValue(kv) => kv.size(),
-		}
-	}
+    pub(crate) fn size(&self) -> u64 {
+        match self {
+            Data::Bucket(b) => b.size(),
+            Data::KeyValue(kv) => kv.size(),
+        }
+    }
 
-	/// Checks if the `Data` is a `KVPair`
-	pub fn is_kv(&self) -> bool {
-		matches!(self, Data::KeyValue(_))
-	}
+    /// Checks if the `Data` is a `KVPair`
+    pub fn is_kv(&self) -> bool {
+        matches!(self, Data::KeyValue(_))
+    }
 
-	/// Asserts that the `Data` is a `KVPair` and returns the inner data
-	///
-	/// This is an ergonomic function since data is wrapped up in a `Ref` and matching is annoying
-	pub fn kv(&self) -> &KVPair {
-		if let Self::KeyValue(kv) = self {
-			return kv;
-		}
-		panic!("Cannot get KVPair from BucketData");
-	}
+    /// Asserts that the `Data` is a `KVPair` and returns the inner data
+    ///
+    /// This is an ergonomic function since data is wrapped up in a `Ref` and matching is annoying
+    pub fn kv(&self) -> &KVPair {
+        if let Self::KeyValue(kv) = self {
+            return kv;
+        }
+        panic!("Cannot get KVPair from BucketData");
+    }
 }
 
 /// Nested bucket placeholder
@@ -180,44 +180,44 @@ impl Data {
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct BucketData {
-	name: SliceParts,
-	meta: SliceParts,
+    name: SliceParts,
+    meta: SliceParts,
 }
 
 impl BucketData {
-	pub(crate) fn new(name: &[u8], meta: &[u8]) -> Self {
-		BucketData {
-			name: SliceParts::from_slice(name),
-			meta: SliceParts::from_slice(meta),
-		}
-	}
+    pub(crate) fn new(name: &[u8], meta: &[u8]) -> Self {
+        BucketData {
+            name: SliceParts::from_slice(name),
+            meta: SliceParts::from_slice(meta),
+        }
+    }
 
-	pub(crate) fn from_slice_parts(name: SliceParts, meta: SliceParts) -> Self {
-		BucketData { name, meta }
-	}
+    pub(crate) fn from_slice_parts(name: SliceParts, meta: SliceParts) -> Self {
+        BucketData { name, meta }
+    }
 
-	pub(crate) fn from_meta(name: SliceParts, meta: &BucketMeta) -> Self {
-		BucketData {
-			name,
-			meta: SliceParts::from_slice(meta.as_ref()),
-		}
-	}
+    pub(crate) fn from_meta(name: SliceParts, meta: &BucketMeta) -> Self {
+        BucketData {
+            name,
+            meta: SliceParts::from_slice(meta.as_ref()),
+        }
+    }
 
-	/// Returns the name of the bucket as a byte slice.
-	pub fn name(&self) -> &[u8] {
-		self.name.slice()
-	}
+    /// Returns the name of the bucket as a byte slice.
+    pub fn name(&self) -> &[u8] {
+        self.name.slice()
+    }
 
-	pub(crate) fn meta(&self) -> BucketMeta {
-		#[allow(clippy::cast_ptr_alignment)]
-		unsafe {
-			*(self.meta.ptr as *const BucketMeta)
-		}
-	}
+    pub(crate) fn meta(&self) -> BucketMeta {
+        #[allow(clippy::cast_ptr_alignment)]
+        unsafe {
+            *(self.meta.ptr as *const BucketMeta)
+        }
+    }
 
-	pub(crate) fn size(&self) -> u64 {
-		self.name.size() + self.meta.size()
-	}
+    pub(crate) fn size(&self) -> u64 {
+        self.name.size() + self.meta.size()
+    }
 }
 
 /// Key / Value Pair
@@ -252,218 +252,218 @@ impl BucketData {
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct KVPair {
-	key: SliceParts,
-	value: SliceParts,
+    key: SliceParts,
+    value: SliceParts,
 }
 
 impl KVPair {
-	fn new(key: &[u8], value: &[u8]) -> Self {
-		KVPair {
-			key: SliceParts::from_slice(key),
-			value: SliceParts::from_slice(value),
-		}
-	}
+    fn new(key: &[u8], value: &[u8]) -> Self {
+        KVPair {
+            key: SliceParts::from_slice(key),
+            value: SliceParts::from_slice(value),
+        }
+    }
 
-	pub(crate) fn from_slice_parts(key: SliceParts, value: SliceParts) -> Self {
-		KVPair { key, value }
-	}
+    pub(crate) fn from_slice_parts(key: SliceParts, value: SliceParts) -> Self {
+        KVPair { key, value }
+    }
 
-	pub(crate) fn size(&self) -> u64 {
-		self.key.size() + self.value.size()
-	}
+    pub(crate) fn size(&self) -> u64 {
+        self.key.size() + self.value.size()
+    }
 
-	/// Returns the key of the key / value pair as a byte slice.
-	pub fn key(&self) -> &[u8] {
-		self.key.slice()
-	}
+    /// Returns the key of the key / value pair as a byte slice.
+    pub fn key(&self) -> &[u8] {
+        self.key.slice()
+    }
 
-	/// Returns the value of the key / value pair as a byte slice.
-	pub fn value(&self) -> &[u8] {
-		self.value.slice()
-	}
+    /// Returns the value of the key / value pair as a byte slice.
+    pub fn value(&self) -> &[u8] {
+        self.value.slice()
+    }
 }
 
 #[derive(Clone, Copy)]
 pub(crate) struct SliceParts {
-	ptr: *const u8,
-	len: u64,
+    ptr: *const u8,
+    len: u64,
 }
 
 impl SliceParts {
-	pub(crate) fn from_slice(s: &[u8]) -> SliceParts {
-		let ptr;
-		let len = s.len() as u64;
-		if len > 0 {
-			ptr = &s[0] as *const u8;
-		} else {
-			ptr = std::ptr::null::<u8>();
-		}
-		SliceParts { ptr, len }
-	}
+    pub(crate) fn from_slice(s: &[u8]) -> SliceParts {
+        let ptr;
+        let len = s.len() as u64;
+        if len > 0 {
+            ptr = &s[0] as *const u8;
+        } else {
+            ptr = std::ptr::null::<u8>();
+        }
+        SliceParts { ptr, len }
+    }
 
-	pub(crate) fn slice(&self) -> &[u8] {
-		unsafe { std::slice::from_raw_parts(self.ptr, self.len as usize) }
-	}
+    pub(crate) fn slice(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.ptr, self.len as usize) }
+    }
 
-	pub(crate) fn size(&self) -> u64 {
-		self.len
-	}
+    pub(crate) fn size(&self) -> u64 {
+        self.len
+    }
 }
 
 impl Ord for SliceParts {
-	fn cmp(&self, other: &Self) -> Ordering {
-		self.slice().cmp(other.slice())
-	}
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.slice().cmp(other.slice())
+    }
 }
 
 impl PartialOrd for SliceParts {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
-	}
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl PartialEq for SliceParts {
-	fn eq(&self, other: &Self) -> bool {
-		self.slice().eq(other.slice())
-	}
+    fn eq(&self, other: &Self) -> bool {
+        self.slice().eq(other.slice())
+    }
 }
 
 impl Eq for SliceParts {}
 
 impl Hash for SliceParts {
-	fn hash<H: Hasher>(&self, state: &mut H) {
-		self.slice().hash(state);
-	}
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.slice().hash(state);
+    }
 }
 
 impl fmt::Debug for SliceParts {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "[ ")?;
-		for byte in self.slice() {
-			write!(f, "{} ", byte)?
-		}
-		write!(f, "]")?;
-		Ok(())
-	}
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[ ")?;
+        for byte in self.slice() {
+            write!(f, "{} ", byte)?
+        }
+        write!(f, "]")?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+    use super::*;
 
-	#[test]
-	fn test_slice_parts() {
-		let s = vec![42, 84, 126];
-		let s = s.as_slice();
+    #[test]
+    fn test_slice_parts() {
+        let s = vec![42, 84, 126];
+        let s = s.as_slice();
 
-		let parts = SliceParts::from_slice(s);
-		assert_eq!(parts.slice(), s);
-		assert_eq!(parts.size(), 3);
+        let parts = SliceParts::from_slice(s);
+        assert_eq!(parts.slice(), s);
+        assert_eq!(parts.size(), 3);
 
-		assert_eq!(parts, SliceParts::from_slice(s));
+        assert_eq!(parts, SliceParts::from_slice(s));
 
-		use std::collections::hash_map::RandomState;
-		use std::hash::BuildHasher;
-		let state = RandomState::new();
-		let mut hasher_1 = state.build_hasher();
-		let mut hasher_2 = state.build_hasher();
-		parts.hash(&mut hasher_1);
-		s.hash(&mut hasher_2);
-		assert_eq!(hasher_1.finish(), hasher_2.finish());
-		assert_eq!(format!("{:?}", s), "[42, 84, 126]");
-		let s2 = vec![41, 85, 142];
-		let other_parts = SliceParts::from_slice(s2.as_slice());
-		assert_eq!(parts.partial_cmp(&other_parts), Some(Ordering::Greater));
-		assert!(!parts.eq(&other_parts));
+        use std::collections::hash_map::RandomState;
+        use std::hash::BuildHasher;
+        let state = RandomState::new();
+        let mut hasher_1 = state.build_hasher();
+        let mut hasher_2 = state.build_hasher();
+        parts.hash(&mut hasher_1);
+        s.hash(&mut hasher_2);
+        assert_eq!(hasher_1.finish(), hasher_2.finish());
+        assert_eq!(format!("{:?}", s), "[42, 84, 126]");
+        let s2 = vec![41, 85, 142];
+        let other_parts = SliceParts::from_slice(s2.as_slice());
+        assert_eq!(parts.partial_cmp(&other_parts), Some(Ordering::Greater));
+        assert!(!parts.eq(&other_parts));
 
-		let s2 = vec![43, 1, 200];
-		let other_parts = SliceParts::from_slice(s2.as_slice());
-		assert_eq!(parts.partial_cmp(&other_parts), Some(Ordering::Less));
-		assert!(!parts.eq(&other_parts));
-		let s2 = vec![42, 84, 126];
-		let other_parts = SliceParts::from_slice(s2.as_slice());
-		assert_eq!(parts.partial_cmp(&other_parts), Some(Ordering::Equal));
-		assert!(parts.eq(&other_parts));
-	}
+        let s2 = vec![43, 1, 200];
+        let other_parts = SliceParts::from_slice(s2.as_slice());
+        assert_eq!(parts.partial_cmp(&other_parts), Some(Ordering::Less));
+        assert!(!parts.eq(&other_parts));
+        let s2 = vec![42, 84, 126];
+        let other_parts = SliceParts::from_slice(s2.as_slice());
+        assert_eq!(parts.partial_cmp(&other_parts), Some(Ordering::Equal));
+        assert!(parts.eq(&other_parts));
+    }
 
-	#[test]
-	fn test_kv_pair() {
-		let k = vec![1, 2, 3, 4];
-		let v = vec![5, 6, 7, 8, 9, 0];
+    #[test]
+    fn test_kv_pair() {
+        let k = vec![1, 2, 3, 4];
+        let v = vec![5, 6, 7, 8, 9, 0];
 
-		let kv = KVPair::new(&k, &v);
-		assert_eq!(kv.key(), &k[..]);
-		assert_eq!(kv.value(), &v[..]);
-		assert_eq!(kv.size(), 10);
+        let kv = KVPair::new(&k, &v);
+        assert_eq!(kv.key(), &k[..]);
+        assert_eq!(kv.value(), &v[..]);
+        assert_eq!(kv.size(), 10);
 
-		let kv = KVPair::from_slice_parts(SliceParts::from_slice(&k), SliceParts::from_slice(&v));
-		assert_eq!(kv.key(), &k[..]);
-		assert_eq!(kv.value(), &v[..]);
-		assert_eq!(kv.size(), 10);
-	}
+        let kv = KVPair::from_slice_parts(SliceParts::from_slice(&k), SliceParts::from_slice(&v));
+        assert_eq!(kv.key(), &k[..]);
+        assert_eq!(kv.value(), &v[..]);
+        assert_eq!(kv.size(), 10);
+    }
 
-	#[test]
-	fn test_bucket_data() {
-		let name = b"Hello Bucket!";
-		let mut meta = BucketMeta {
-			root_page: 3,
-			next_int: 24_985_738_796,
-		};
+    #[test]
+    fn test_bucket_data() {
+        let name = b"Hello Bucket!";
+        let mut meta = BucketMeta {
+            root_page: 3,
+            next_int: 24_985_738_796,
+        };
 
-		let b = BucketData::new(name, meta.as_ref());
-		assert_eq!(b.name(), name);
-		assert_eq!(b.meta().root_page, meta.root_page);
-		assert_eq!(b.meta().next_int, meta.next_int);
-		assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta) as u64);
+        let b = BucketData::new(name, meta.as_ref());
+        assert_eq!(b.name(), name);
+        assert_eq!(b.meta().root_page, meta.root_page);
+        assert_eq!(b.meta().next_int, meta.next_int);
+        assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta) as u64);
 
-		meta.next_int += 1;
-		assert_eq!(b.meta().next_int, meta.next_int);
+        meta.next_int += 1;
+        assert_eq!(b.meta().next_int, meta.next_int);
 
-		let b = BucketData::from_slice_parts(
-			SliceParts::from_slice(name),
-			SliceParts::from_slice(meta.as_ref()),
-		);
-		assert_eq!(b.name(), name);
-		assert_eq!(b.meta().root_page, meta.root_page);
-		assert_eq!(b.meta().next_int, meta.next_int);
-		assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta) as u64);
+        let b = BucketData::from_slice_parts(
+            SliceParts::from_slice(name),
+            SliceParts::from_slice(meta.as_ref()),
+        );
+        assert_eq!(b.name(), name);
+        assert_eq!(b.meta().root_page, meta.root_page);
+        assert_eq!(b.meta().next_int, meta.next_int);
+        assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta) as u64);
 
-		meta.next_int += 1;
-		assert_eq!(b.meta().next_int, meta.next_int);
+        meta.next_int += 1;
+        assert_eq!(b.meta().next_int, meta.next_int);
 
-		let b = BucketData::from_meta(SliceParts::from_slice(name), &meta);
-		assert_eq!(b.name(), name);
-		assert_eq!(b.meta().root_page, meta.root_page);
-		assert_eq!(b.meta().next_int, meta.next_int);
-		assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta) as u64);
+        let b = BucketData::from_meta(SliceParts::from_slice(name), &meta);
+        assert_eq!(b.name(), name);
+        assert_eq!(b.meta().root_page, meta.root_page);
+        assert_eq!(b.meta().next_int, meta.next_int);
+        assert_eq!(b.size(), 13 + std::mem::size_of_val(&meta) as u64);
 
-		meta.next_int += 1;
-		assert_eq!(b.meta().next_int, meta.next_int);
-	}
+        meta.next_int += 1;
+        assert_eq!(b.meta().next_int, meta.next_int);
+    }
 
-	#[test]
-	fn test_data() {
-		let k = vec![1, 2, 3, 4, 5, 6, 7, 8];
-		let v = vec![11, 22, 33, 44, 55, 66, 77, 88];
+    #[test]
+    fn test_data() {
+        let k = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let v = vec![11, 22, 33, 44, 55, 66, 77, 88];
 
-		let data: Data = Data::KeyValue(KVPair::new(&k, &v));
+        let data: Data = Data::KeyValue(KVPair::new(&k, &v));
 
-		assert_eq!(data.node_type(), Node::TYPE_DATA);
-		assert_eq!(data.key_parts(), SliceParts::from_slice(&k));
-		assert_eq!(data.key(), &k[..]);
-		assert_eq!(data.value(), &v[..]);
-		assert_eq!(data.size(), 16);
+        assert_eq!(data.node_type(), Node::TYPE_DATA);
+        assert_eq!(data.key_parts(), SliceParts::from_slice(&k));
+        assert_eq!(data.key(), &k[..]);
+        assert_eq!(data.value(), &v[..]);
+        assert_eq!(data.size(), 16);
 
-		let meta = BucketMeta {
-			root_page: 456,
-			next_int: 8_888_888,
-		};
-		let data: Data = Data::Bucket(BucketData::new(&k, meta.as_ref()));
+        let meta = BucketMeta {
+            root_page: 456,
+            next_int: 8_888_888,
+        };
+        let data: Data = Data::Bucket(BucketData::new(&k, meta.as_ref()));
 
-		assert_eq!(data.node_type(), Node::TYPE_BUCKET);
-		assert_eq!(data.key_parts(), SliceParts::from_slice(&k));
-		assert_eq!(data.key(), &k[..]);
-		assert_eq!(data.value(), meta.as_ref());
-		assert_eq!(data.size(), 8 + std::mem::size_of_val(&meta) as u64);
-	}
+        assert_eq!(data.node_type(), Node::TYPE_BUCKET);
+        assert_eq!(data.key_parts(), SliceParts::from_slice(&k));
+        assert_eq!(data.key(), &k[..]);
+        assert_eq!(data.value(), meta.as_ref());
+        assert_eq!(data.size(), 8 + std::mem::size_of_val(&meta) as u64);
+    }
 }
