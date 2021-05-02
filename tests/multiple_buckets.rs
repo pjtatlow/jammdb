@@ -136,3 +136,47 @@ fn check_data(b: &Bucket, len: u64, repeats: usize, bucket_names: Vec<Vec<u8>>) 
     }
     assert_eq!(count, len);
 }
+
+#[test]
+fn empty_nested_buckets() -> Result<(), Error> {
+    let random_file = common::RandomFile::new();
+    {
+        let db = DB::open(&random_file.path)?;
+        {
+            let tx = db.tx(true)?;
+            let _root = tx.get_or_create_bucket("ROOT")?;
+            tx.commit()?;
+        }
+        {
+            let tx = db.tx(true)?;
+            let root = tx.get_or_create_bucket("ROOT")?;
+            let _child = root.get_or_create_bucket("CHILD")?;
+            tx.commit()?;
+        }
+        {
+            let tx = db.tx(true)?;
+            let root = tx.get_or_create_bucket("ROOT")?;
+            let child = root.get_or_create_bucket("CHILD")?;
+            child.put("A", "B")?;
+            // let _grandchild = child.get_or_create_bucket("GRANDCHILD")?;
+            tx.commit()?;
+        }
+        {
+            let tx = db.tx(true)?;
+            let root = tx.get_or_create_bucket("ROOT")?;
+            let child = root.get_or_create_bucket("CHILD")?;
+            let _grandchild = child.get_or_create_bucket("GRANDCHILD")?;
+            tx.commit()?;
+        }
+        {
+            let tx = db.tx(true)?;
+            let root = tx.get_or_create_bucket("ROOT")?;
+            let child = root.get_or_create_bucket("CHILD")?;
+            let grandchild = child.get_or_create_bucket("GRANDCHILD")?;
+            let _greatgrandchild = grandchild.get_or_create_bucket("GREATGRANDCHILD")?;
+            tx.commit()?;
+        }
+    }
+    let db = DB::open(&random_file.path)?;
+    db.check()
+}
