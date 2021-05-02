@@ -324,7 +324,11 @@ impl Node {
                     .binary_search_by_key(&child.original_key.unwrap().slice(), |b| b.key())
                 {
                     Ok(i) => i,
-                    _ => panic!("THIS IS VERY VERY BAD"),
+                    Err(i) => panic!(
+                        "THIS IS VERY VERY BAD: {:?} {}",
+                        &child.original_key.unwrap().slice(),
+                        i
+                    ),
                 };
                 branches[index] = Branch::from_node(&child);
                 if let Some(mut new_branches) = new_branches {

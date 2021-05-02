@@ -16,13 +16,11 @@ environment:
     - TARGET: i686-pc-windows-msvc
     - TARGET: x86_64-pc-windows-msvc
 
-    # These tests are failing on Appveyor, but I cannot get them to fail on my own PC (ran for 12 hours with no failures)
-    # disabling them for now 🙃
     # Testing other channels
-    # - TARGET: x86_64-pc-windows-gnu
-    #   RUST_VERSION: nightly
-    # - TARGET: x86_64-pc-windows-msvc
-    #   RUST_VERSION: nightly
+    - TARGET: x86_64-pc-windows-gnu
+      RUST_VERSION: nightly
+    - TARGET: x86_64-pc-windows-msvc
+      RUST_VERSION: nightly
 
 install:
   - ps: >-
