@@ -22,11 +22,11 @@ exclude = [
 memmap = "0.7.0"
 page_size = "0.4.2"
 fs2 = "0.4.3"
-sha3 = "0.9"
+sha3 = "0.10"
 
 [dev-dependencies]
 rand = "0.8"
-rmp-serde = "0.15"
+rmp-serde = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 
 [badges]
