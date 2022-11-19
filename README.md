@@ -7,6 +7,7 @@
 [![MacOS Build](https://img.shields.io/travis/com/pjtatlow/jammdb?logo=apple&style=flat-square)](https://travis-ci.com/github/pjtatlow/jammdb)
 [![Windows Build](https://img.shields.io/appveyor/build/pjtatlow/jammdb?logo=windows)](https://ci.appveyor.com/project/pjtatlow/jammdb)
 [![Linux Build](https://img.shields.io/travis/com/pjtatlow/jammdb?logo=linux&style=flat-square)](https://travis-ci.com/github/pjtatlow/jammdb)
+[![Dependency Status](https://deps.rs/repo/github/pjtatlow/jammdb/status.svg?style=flat-square)](https://deps.rs/repo/github/pjtatlow/jammdb)
 [![Coverage Status](https://img.shields.io/codecov/c/gh/pjtatlow/jammdb?style=flat-square)](https://codecov.io/gh/pjtatlow/jammdb)
 [![License](https://img.shields.io/crates/l/jammdb?style=flat-square)](https://crates.io/crates/jammdb)
 
