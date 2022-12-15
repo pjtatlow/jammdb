@@ -1,12 +1,15 @@
 name: Build && Test
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [master]
+  pull_request: {}
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check:
+  checks:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -22,7 +25,7 @@ jobs:
           cargo fmt --check
           cargo clippy $CLIPPY_OPTS
 
-  test-win:
+  test-windows:
     runs-on: windows-latest
     strategy:
       matrix:
@@ -87,7 +90,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@1.36.0
+        uses: dtolnay/rust-toolchain@1.50.0
 
       - name: Run tests
         run: cargo test --verbose
