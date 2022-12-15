@@ -469,6 +469,7 @@ pub(crate) struct BucketInner {
 
 impl BucketInner {
     fn new_child(&mut self, name: &[u8]) {
+        self.dirty = true;
         let b = Bucket::new(BucketInner {
             tx: Ptr::new(&self.tx),
             meta: BucketMeta::default(),
@@ -739,11 +740,24 @@ impl BucketInner {
         self.nodes.get_mut(id as usize).unwrap()
     }
 
+    fn is_dirty(&mut self) -> bool {
+        if !self.dirty {
+            for (_key, b) in self.buckets.iter_mut() {
+                let b = b.inner.get_mut();
+                if b.is_dirty() {
+                    self.dirty = true;
+                    break;
+                }
+            }
+        }
+        return self.dirty;
+    }
+
     fn rebalance(&mut self) -> Result<BucketMeta> {
         let mut bucket_metas = HashMap::new();
         for (key, b) in self.buckets.iter_mut() {
             let b = b.inner.get_mut();
-            if b.dirty {
+            if b.is_dirty() {
                 self.dirty = true;
                 let bucket_meta = b.rebalance()?;
                 bucket_metas.insert(key.clone(), bucket_meta);

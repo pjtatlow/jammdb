@@ -20,7 +20,7 @@ exclude = [
 
 [dependencies]
 memmap = "0.7.0"
-page_size = "0.4.2"
+page_size = "0.5"
 fs2 = "0.4.3"
 sha3 = "0.10"
 
