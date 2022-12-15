@@ -2,19 +2,17 @@
 
 ## Just Another Memory Mapped Database
 
-[![Crates.io](https://img.shields.io/crates/v/jammdb?style=flat-square)](https://crates.io/crates/jammdb)
-[![Crates.io](https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square)](https://docs.rs/jammdb)
-[![MacOS Build](https://img.shields.io/travis/com/pjtatlow/jammdb?logo=apple&style=flat-square)](https://travis-ci.com/github/pjtatlow/jammdb)
-[![Windows Build](https://img.shields.io/appveyor/build/pjtatlow/jammdb?logo=windows)](https://ci.appveyor.com/project/pjtatlow/jammdb)
-[![Linux Build](https://img.shields.io/travis/com/pjtatlow/jammdb?logo=linux&style=flat-square)](https://travis-ci.com/github/pjtatlow/jammdb)
-[![Dependency Status](https://deps.rs/repo/github/pjtatlow/jammdb/status.svg?style=flat-square)](https://deps.rs/repo/github/pjtatlow/jammdb)
+[![crates.io](https://img.shields.io/crates/v/jammdb?style=flat-square)](https://crates.io/crates/jammdb)
+[![docs.rs](https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square)](https://docs.rs/jammdb)
+[![Build status](https://img.shields.io/github/actions/workflow/status/pjtatlow/jammdb/rust.yml?branch=master&style=flat-square)](https://github.com/pjtatlow/jammdb/actions/workflows/rust.yml)
 [![Coverage Status](https://img.shields.io/codecov/c/gh/pjtatlow/jammdb?style=flat-square)](https://codecov.io/gh/pjtatlow/jammdb)
 [![License](https://img.shields.io/crates/l/jammdb?style=flat-square)](https://crates.io/crates/jammdb)
+[![Dependency Status](https://deps.rs/repo/github/pjtatlow/jammdb/status.svg?style=flat-square)](https://deps.rs/repo/github/pjtatlow/jammdb)
 
 
 `jammdb` is an embedded, single-file database that allows you to store key / value pairs as bytes.
 
-It started life as a Rust port of [Ben Johnson's](https://twitter.com/benbjohnson) awesome [BoltDB](https://github.com/boltdb/bolt),
+It started life as a Rust port of [Ben Johnson's](https://twitter.com/benbjohnson) [BoltDB](https://github.com/boltdb/bolt),
 which was inspired by [Howard Chu's](https://twitter.com/hyc_symas) [LMDB](http://symas.com/mdb/),
 so please check out both of these awesome projects!
 
@@ -37,11 +35,6 @@ so reads require no additional memory allocation.
   * `i686-pc-windows-msvc`
   * `x86_64-pc-windows-gnu`
   * `i686-pc-windows-gnu`
-  * `arm-linux-androideabi` (Android)
-  * `aarch64-unknown-linux-gnu` (ARM)
-  * `arm-unknown-linux-gnueabihf`
-  * `mips-unknown-linux-gnu` (MIPS)
-  * `x86_64-apple-ios` (iOS)
 
 ## Examples
 
