@@ -54,8 +54,8 @@ fn main() -> Result<(), Error> {
 
     // create a bucket to store a map of first names to last names
     let names_bucket = tx.create_bucket("names")?;
-    names_bucket.put(b"Kanan", b"Jarrus")?;
-    names_bucket.put(b"Ezra", b"Bridger")?;
+    names_bucket.put("Kanan", "Jarrus")?;
+    names_bucket.put("Ezra", "Bridger")?;
 
     // commit the changes so they are saved to disk
     tx.commit()?;
@@ -68,7 +68,7 @@ fn main() -> Result<(), Error> {
     // get the bucket we created in the last transaction
     let names_bucket = tx.get_bucket("names")?;
     // get the key/ value pair we inserted into the bucket
-    if let Some(data) = names_bucket.get(b"Kanan") {
+    if let Some(data) = names_bucket.get("Kanan") {
         assert!(data.is_kv());
         assert_eq!(data.kv().value(), b"Jarrus");
     }
@@ -105,7 +105,7 @@ fn main() -> Result<(), Error> {
 
     // serialize struct to bytes and store in bucket
     let user_bytes = rmp_serde::to_vec(&user).unwrap();
-    users_bucket.put(b"user1", user_bytes)?;
+    users_bucket.put("user1", user_bytes)?;
 
     // commit the changes so they are saved to disk
     tx.commit()?;
@@ -118,7 +118,7 @@ fn main() -> Result<(), Error> {
     // get the bucket we created in the last transaction
     let users_bucket = tx.get_bucket("users")?;
     // get the key / value pair we inserted into the bucket
-    if let Some(data) = users_bucket.get(b"user1") {
+    if let Some(data) = users_bucket.get("user1") {
         if data.is_kv() {
             let kv = data.kv();
             // deserialize into a user struct

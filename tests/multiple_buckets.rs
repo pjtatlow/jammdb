@@ -124,7 +124,7 @@ fn check_data(b: &Bucket, len: u64, repeats: usize, bucket_names: Vec<Vec<u8>>) 
     for (i, data) in b.cursor().into_iter().enumerate() {
         let i = i as u64;
         count += 1;
-        match &*data {
+        match data {
             Data::KeyValue(kv) => {
                 assert_eq!(kv.key(), i.to_be_bytes());
                 assert_eq!(kv.value(), i.to_string().repeat(repeats).as_bytes());

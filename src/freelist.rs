@@ -1,7 +1,43 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem::size_of;
 
+use crate::meta::Meta;
 use crate::page::{Page, PageID};
+
+pub(crate) struct TxFreelist {
+    pub(crate) meta: Meta,
+    pub(crate) inner: Freelist,
+}
+
+impl TxFreelist {
+    pub(crate) fn new(meta: Meta, inner: Freelist) -> TxFreelist {
+        TxFreelist { meta, inner }
+    }
+
+    pub(crate) fn free(&mut self, page_id: PageID, num_pages: u64) {
+        debug_assert!(num_pages > 0, "cannot free zero pages");
+        for id in page_id..(page_id + num_pages) {
+            self.inner.free(self.meta.tx_id, id);
+        }
+    }
+
+    pub(crate) fn allocate(&mut self, bytes: u64) -> (PageID, u64) {
+        let num_pages = if (bytes % self.meta.pagesize) == 0 {
+            bytes / self.meta.pagesize
+        } else {
+            (bytes / self.meta.pagesize) + 1
+        };
+        let page_id = match self.inner.allocate(num_pages as usize) {
+            Some(page_id) => page_id,
+            None => {
+                let page_id = self.meta.num_pages;
+                self.meta.num_pages += num_pages;
+                page_id
+            }
+        };
+        (page_id, num_pages)
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct Freelist {
@@ -28,6 +64,11 @@ impl Freelist {
 
     // adds the page to the transaction's set of free pages
     pub(crate) fn free(&mut self, tx_id: u64, page_id: PageID) {
+        debug_assert!(
+            page_id > 1,
+            "cannot free page {}, reserved for meta",
+            page_id
+        );
         let pages = self.pending_pages.entry(tx_id).or_insert_with(Vec::new);
         pages.push(page_id);
     }
@@ -56,7 +97,11 @@ impl Freelist {
         let mut found: PageID = 0;
 
         for id in self.free_pages.iter().cloned() {
-            debug_assert!(id > 1, "invalid pageID in freelist");
+            debug_assert!(
+                id > 1,
+                "pageID {} cannot be in freelist, reserved for meta",
+                id
+            );
 
             if prev == 0 || id - prev != 1 {
                 start = id;
@@ -100,6 +145,7 @@ impl Freelist {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{errors::Result, testutil::RandomFile, OpenOptions};
 
     fn freelist_from_vec(v: Vec<PageID>) -> Freelist {
         let mut freelist = Freelist {
@@ -197,5 +243,82 @@ mod tests {
     fn test_size() {
         let freelist = freelist_from_vec(vec![1, 2, 3]);
         assert_eq!(freelist.size(), HEADER_SIZE + (PAGE_ID_SIZE * 3));
+    }
+
+    #[test]
+    fn test_allocate_no_freelist() -> Result<()> {
+        let random_file = RandomFile::new();
+        let db = OpenOptions::new()
+            .pagesize(1024)
+            .num_pages(4)
+            .open(&random_file)?;
+        let tx = db.tx(false)?;
+        let tx = tx.inner.borrow_mut();
+        let mut freelist = tx.freelist.borrow_mut();
+        // make sure we have an empty freelist and only four pages
+        assert_eq!(freelist.inner.pages().len(), 0);
+        assert_eq!(tx.meta.num_pages, 4);
+        // allocate one page worth of bytes
+        assert_eq!(freelist.allocate(1024), (4, 1));
+        // allocate a half page worth of bytes
+        assert_eq!(freelist.allocate(512), (5, 1));
+        // allocate ten pages worth of bytes
+        assert_eq!(freelist.allocate(10240), (6, 10));
+        // allocate a non pagesize number of bytes
+        assert_eq!(freelist.allocate(1234), (16, 2));
+        Ok(())
+    }
+
+    #[test]
+    fn test_allocate_freelist() -> Result<()> {
+        let random_file = RandomFile::new();
+        let db = OpenOptions::new()
+            .pagesize(1024)
+            .num_pages(100)
+            .open(&random_file)?;
+        let tx = db.tx(false)?;
+        let tx = tx.inner.borrow_mut();
+        let mut freelist = tx.freelist.borrow_mut();
+
+        // setup the freelist and num_pages to simulate a used database
+        for page in [10_u64, 11, 13, 14, 15].iter() {
+            freelist.free(*page, 1);
+        }
+        freelist.inner.release(1);
+        freelist.meta.num_pages = 99;
+
+        // allocate one page worth of bytes (should come from freelist)
+        assert_eq!(freelist.allocate(1024), (10, 1));
+        // allocate a half page worth of bytes (should come from freelist)
+        assert_eq!(freelist.allocate(512), (11, 1));
+        // allocate 3 pages worth of bytes (should come from freelist)
+        assert_eq!(freelist.allocate(3000), (13, 3));
+        // allocate one byte (freelist should be empty now)
+        assert_eq!(freelist.allocate(1), (99, 1));
+        Ok(())
+    }
+
+    #[test]
+    fn test_tx_free() -> Result<()> {
+        let random_file = RandomFile::new();
+        let db = OpenOptions::new()
+            .pagesize(1024)
+            .num_pages(100)
+            .open(&random_file)?;
+        let tx = db.tx(false)?;
+        let tx = tx.inner.borrow_mut();
+        let mut freelist = tx.freelist.borrow_mut();
+
+        assert_eq!(tx.meta.tx_id, 0);
+        assert_eq!(freelist.inner.pages().len(), 0);
+        freelist.free(80, 1);
+        assert_eq!(freelist.inner.pages(), vec![80]);
+        freelist.free(100, 6);
+        assert_eq!(
+            freelist.inner.pages(),
+            vec![80, 100, 101, 102, 103, 104, 105]
+        );
+
+        Ok(())
     }
 }

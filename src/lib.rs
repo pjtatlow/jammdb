@@ -2,7 +2,7 @@
 //!
 //! jammdb is an embedded, single-file database that allows you to store key / value pairs as bytes.
 //!
-//! It started life as a Rust port of [Ben Johnson's](https://twitter.com/benbjohnson) awesome [BoltDB](https://github.com/boltdb/bolt),
+//! It started life as a Rust port of [Ben Johnson's](https://twitter.com/benbjohnson) [BoltDB](https://github.com/boltdb/bolt),
 //! which was inspired by [Howard Chu's](https://twitter.com/hyc_symas) [LMDB](http://symas.com/mdb/),
 //! so please check out both of these awesome projects!
 //!
@@ -18,7 +18,7 @@
 //! and each bucket can contain any number of unique keys which map to either an arbitrary value (a `&[u8]`) or a nested bucket. Examples on how to use jammdb are below.
 //! There are also more examples in the docs, be sure to check out
 //! * Using a [`Cursor`] to iterate over the data in a bucket
-//! * How to create and use multiple [`Transaction`]s
+//! * How to create and use multiple [`Tx`]s
 //! * Nested [`Buckets`](struct.Bucket.html)
 //! * [`OpenOptions`](struct.OpenOptions.html) to provide parameters for opening a [`DB`](struct.DB.html)
 //!
@@ -38,8 +38,8 @@
 //!
 //!     // create a bucket to store a map of first names to last names
 //!     let mut names_bucket = tx.create_bucket("names")?;
-//!     names_bucket.put(b"Kanan", b"Jarrus")?;
-//!     names_bucket.put(b"Ezra", b"Bridger")?;
+//!     names_bucket.put("Kanan", "Jarrus")?;
+//!     names_bucket.put("Ezra", "Bridger")?;
 //!
 //!     // commit the changes so they are saved to disk
 //!     tx.commit()?;
@@ -52,7 +52,7 @@
 //!     // get the bucket we created in the last transaction
 //!     let names_bucket = tx.get_bucket("names")?;
 //!     // get the key / value pair we inserted into the bucket
-//!     if let Some(data) = names_bucket.get(b"Kanan") {
+//!     if let Some(data) = names_bucket.get("Kanan") {
 //!         assert_eq!(data.kv().value(), b"Jarrus");
 //!     }
 //! }
@@ -88,7 +88,7 @@
 //!
 //!     // serialize struct to bytes and store in bucket
 //!     let user_bytes = rmp_serde::to_vec(&user).unwrap();
-//!     users_bucket.put(b"user1", user_bytes)?;
+//!     users_bucket.put("user1", user_bytes)?;
 //!
 //!     // commit the changes so they are saved to disk
 //!     tx.commit()?;
@@ -112,10 +112,8 @@
 //! ```
 //!
 
-#![warn(clippy::all)]
-#![warn(missing_docs)]
-
 mod bucket;
+mod bytes;
 mod cursor;
 mod data;
 mod db;
@@ -124,15 +122,16 @@ mod freelist;
 mod meta;
 mod node;
 mod page;
-mod ptr;
-mod transaction;
+mod page_node;
+mod tx;
 
+pub use crate::bytes::ToBytes;
 pub use bucket::Bucket;
 pub use cursor::Cursor;
 pub use data::*;
 pub use db::{OpenOptions, DB};
 pub use errors::*;
-pub use transaction::Transaction;
+pub use tx::Tx;
 
 #[cfg(test)]
 mod testutil {
@@ -140,6 +139,12 @@ mod testutil {
 
     pub struct RandomFile {
         pub path: std::path::PathBuf,
+    }
+
+    impl Default for RandomFile {
+        fn default() -> Self {
+            Self::new()
+        }
     }
 
     impl RandomFile {
@@ -169,9 +174,8 @@ mod testutil {
     }
 
     impl Drop for RandomFile {
-        #[allow(unused_must_use)]
         fn drop(&mut self) {
-            std::fs::remove_file(&self.path);
+            let _ = std::fs::remove_file(&self.path);
         }
     }
 }
