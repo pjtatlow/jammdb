@@ -1,4 +1,4 @@
-use jammdb::{Bucket, Data, Error, DB};
+use jammdb::{Bucket, Data, Error, OpenOptions, DB};
 use rand::prelude::*;
 
 mod common;
@@ -119,7 +119,9 @@ fn cursor_seek() -> Result<(), Error> {
 
     let random_file = common::RandomFile::new();
     {
-        let db = DB::open(&random_file.path)?;
+        let db = OpenOptions::new()
+            .strict_mode(true)
+            .open(&random_file.path)?;
         {
             let tx = db.tx(true)?;
             let b = tx.create_bucket("abc")?;
@@ -143,7 +145,9 @@ fn cursor_seek() -> Result<(), Error> {
         }
     }
     {
-        let db = DB::open(&random_file.path)?;
+        let db = OpenOptions::new()
+            .strict_mode(true)
+            .open(&random_file.path)?;
         {
             let tx = db.tx(false)?;
             let b = tx.get_bucket("abc")?;
@@ -212,7 +216,9 @@ fn check_cursor(seek_to: &str, expected_fruits: &[&str], b: &Bucket, start_index
 fn root_buckets() -> Result<(), Error> {
     let random_file = common::RandomFile::new();
     {
-        let db = DB::open(&random_file.path)?;
+        let db = OpenOptions::new()
+            .strict_mode(true)
+            .open(&random_file.path)?;
         {
             let tx = db.tx(true)?;
             {
@@ -256,7 +262,9 @@ fn kv_iter() -> Result<(), Error> {
     let random_file = common::RandomFile::new();
     let data = vec![("abc", "one"), ("def", "two"), ("ghi", "three")];
     {
-        let db = DB::open(&random_file.path)?;
+        let db = OpenOptions::new()
+            .strict_mode(true)
+            .open(&random_file.path)?;
         {
             let tx = db.tx(true)?;
             {

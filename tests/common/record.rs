@@ -37,6 +37,7 @@ impl TestDetails {
         let random_file = super::RandomFile::new();
         let db = OpenOptions::new()
             .pagesize(self.page_size as u64)
+            .strict_mode(true)
             .open(&random_file.path)?;
 
         let mut instructions = Instructions::new(self.name)?;

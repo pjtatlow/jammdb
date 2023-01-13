@@ -1,4 +1,4 @@
-use jammdb::{Bucket, Data, Error, DB};
+use jammdb::{Bucket, Data, Error, OpenOptions, DB};
 
 mod common;
 
@@ -6,7 +6,9 @@ mod common;
 fn sibling_buckets() -> Result<(), Error> {
     let random_file = common::RandomFile::new();
     {
-        let db = DB::open(&random_file.path)?;
+        let db = OpenOptions::new()
+            .strict_mode(true)
+            .open(&random_file.path)?;
         {
             let tx = db.tx(true)?;
             let b = tx.create_bucket("abc")?;
@@ -71,7 +73,9 @@ fn sibling_buckets() -> Result<(), Error> {
 fn nested_buckets() -> Result<(), Error> {
     let random_file = common::RandomFile::new();
     {
-        let db = DB::open(&random_file.path)?;
+        let db = OpenOptions::new()
+            .strict_mode(true)
+            .open(&random_file.path)?;
         {
             let tx = db.tx(true)?;
             let b = tx.create_bucket("abc")?;
@@ -141,7 +145,9 @@ fn check_data(b: &Bucket, len: u64, repeats: usize, bucket_names: Vec<Vec<u8>>) 
 fn empty_nested_buckets() -> Result<(), Error> {
     let random_file = common::RandomFile::new();
     {
-        let db = DB::open(&random_file.path)?;
+        let db = OpenOptions::new()
+            .strict_mode(true)
+            .open(&random_file.path)?;
         {
             let tx = db.tx(true)?;
             let _root = tx.get_or_create_bucket("ROOT")?;

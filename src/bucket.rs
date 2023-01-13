@@ -837,13 +837,15 @@ impl<'b> InnerBucket<'b> {
                             let mut sibling = sibling.borrow_mut();
                             // Copy this node's data over to it's sibling
                             sibling.data.merge(&mut node.data);
-                            // Move all children nodes over to that sibling too
-                            for child in node.children.iter() {
-                                let c = &mut self.nodes[*child as usize];
-                                let mut c = c.borrow_mut();
-                                c.parent = Some(sibling.id);
+                            if node.children.len() > 0 {
+                                // Move all children nodes over to that sibling too
+                                for child in node.children.iter() {
+                                    let c = &mut self.nodes[*child as usize];
+                                    let mut c = c.borrow_mut();
+                                    c.parent = Some(sibling.id);
+                                }
+                                sibling.children.append(&mut node.children);
                             }
-                            sibling.children.append(&mut node.children);
                         }
                         // free the child's page and mark it as deleted
                         node.free_page(tx_freelist);

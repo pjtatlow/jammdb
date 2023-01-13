@@ -1,11 +1,13 @@
-use jammdb::{Bucket, Data, Error, DB};
+use jammdb::{Bucket, Data, Error, OpenOptions};
 
 mod common;
 
 #[test]
 fn tx_isolation() -> Result<(), Error> {
     let random_file = common::RandomFile::new();
-    let db = DB::open(&random_file.path)?;
+    let db = OpenOptions::new()
+        .strict_mode(true)
+        .open(&random_file.path)?;
     {
         let ro_tx = db.tx(false)?;
         let wr_tx = db.tx(true)?;

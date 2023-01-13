@@ -302,7 +302,8 @@ impl<'tx> TxInner<'tx> {
             if current_size < required_size {
                 let size_diff = required_size - current_size;
                 let alloc_size = ((size_diff / MIN_ALLOC_SIZE) + 1) * MIN_ALLOC_SIZE;
-                self.db.inner.resize(file, current_size + alloc_size)?;
+                let data = self.db.inner.resize(file, current_size + alloc_size)?;
+                self.pages = Pages::new(data, self.db.inner.pagesize);
             }
 
             // write the data to the file
@@ -315,7 +316,11 @@ impl<'tx> TxInner<'tx> {
                     file.write_all(buf)?;
                 }
             }
-
+        }
+        if self.db.inner.strict_mode {
+            self.check()?;
+        }
+        if let TxLock::Rw(file) = &mut self.lock {
             // write meta page to file
             {
                 let mut buf = vec![0; self.db.inner.pagesize as usize];

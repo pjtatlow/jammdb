@@ -44,6 +44,7 @@ const DEFAULT_NUM_PAGES: usize = 32;
 pub struct OpenOptions {
     pagesize: u64,
     num_pages: usize,
+    strict_mode: bool,
 }
 
 impl OpenOptions {
@@ -83,6 +84,15 @@ impl OpenOptions {
         self
     }
 
+    /// Enables or disabled "Strict Mode", where each transaction will check the database for errors before finalizing a write.
+    ///
+    /// The default is `false`, but you may enable this if you want an extra degree of safety for your data at the cost of
+    /// slower writes.
+    pub fn strict_mode(mut self, strict_mode: bool) -> Self {
+        self.strict_mode = strict_mode;
+        self
+    }
+
     /// Opens the database with the current options.
     ///
     /// If the file does not exist, it will initialize an empty database with a size of (`num_pages * pagesize`) bytes.
@@ -106,7 +116,7 @@ impl OpenOptions {
             FileOpenOptions::new().read(true).write(true).open(path)?
         };
 
-        let db = DBInner::open(file, self.pagesize)?;
+        let db = DBInner::open(file, self.pagesize, self.strict_mode)?;
         Ok(DB {
             inner: Arc::new(db),
         })
@@ -122,6 +132,7 @@ impl Default for OpenOptions {
         OpenOptions {
             pagesize,
             num_pages: DEFAULT_NUM_PAGES,
+            strict_mode: false,
         }
     }
 }
@@ -184,12 +195,13 @@ pub(crate) struct DBInner {
     pub(crate) freelist: Mutex<Freelist>,
     pub(crate) file: Mutex<File>,
     pub(crate) open_ro_txs: Mutex<Vec<u64>>,
+    pub(crate) strict_mode: bool,
 
     pub(crate) pagesize: u64,
 }
 
 impl DBInner {
-    pub(crate) fn open(file: File, pagesize: u64) -> Result<DBInner> {
+    pub(crate) fn open(file: File, pagesize: u64, strict_mode: bool) -> Result<DBInner> {
         file.lock_exclusive()?;
 
         let mmap = unsafe { Mmap::map(&file)? };
@@ -203,6 +215,7 @@ impl DBInner {
             open_ro_txs: Mutex::new(Vec::new()),
 
             pagesize,
+            strict_mode,
         };
 
         {

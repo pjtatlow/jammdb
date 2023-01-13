@@ -1,4 +1,4 @@
-use jammdb::{Bucket, Data, Error, DB};
+use jammdb::{Bucket, Data, Error, OpenOptions, DB};
 use rand::prelude::*;
 
 mod common;
@@ -37,7 +37,9 @@ fn test_insert(mut values: Vec<u64>) -> Result<(), Error> {
     let random_file = common::RandomFile::new();
     let mut rng = rand::thread_rng();
     {
-        let db = DB::open(&random_file.path)?;
+        let db = OpenOptions::new()
+            .strict_mode(true)
+            .open(&random_file.path)?;
         {
             let tx = db.tx(true)?;
             let b = tx.create_bucket("abc")?;
