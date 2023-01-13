@@ -3,6 +3,7 @@ use std::{
     collections::HashSet,
     fs::File,
     io::{Seek, SeekFrom, Write},
+    marker::PhantomData,
     rc::Rc,
     sync::{MutexGuard, RwLockReadGuard},
 };
@@ -163,7 +164,7 @@ impl<'tx> Tx<'tx> {
     /// or an [`IncompatibleValue`](enum.Error.html#variant.IncompatibleValue) error if the key exists but is not a bucket.
     ///
     /// In a read-only transaction, you will get an error when trying to use any of the bucket's methods that modify data.    
-    pub fn get_bucket<'b, T: ToBytes<'tx>>(&'b self, name: T) -> Result<Bucket<'tx>> {
+    pub fn get_bucket<'b, T: ToBytes<'tx>>(&'b self, name: T) -> Result<Bucket<'b, 'tx>> {
         let tx = self.inner.borrow();
         let mut root = tx.root.borrow_mut();
         let inner = root.get_bucket(name)?;
@@ -171,6 +172,7 @@ impl<'tx> Tx<'tx> {
             inner,
             freelist: tx.freelist.clone(),
             writable: tx.lock.writable(),
+            _phantom: PhantomData,
         })
     }
 
@@ -181,7 +183,7 @@ impl<'tx> Tx<'tx> {
     /// Will return a [`BucketExists`](enum.Error.html#variant.BucketExists) error if the bucket already exists,
     /// an [`IncompatibleValue`](enum.Error.html#variant.IncompatibleValue) error if the key exists but is not a bucket,
     /// or a [`ReadOnlyTx`](enum.Error.html#variant.ReadOnlyTx) error if this is called on a read-only transaction.
-    pub fn create_bucket<'b, T: ToBytes<'tx>>(&'b self, name: T) -> Result<Bucket<'tx>> {
+    pub fn create_bucket<'b, T: ToBytes<'tx>>(&'b self, name: T) -> Result<Bucket<'b, 'tx>> {
         let tx = self.inner.borrow();
         if !tx.lock.writable() {
             return Err(Error::ReadOnlyTx);
@@ -192,6 +194,7 @@ impl<'tx> Tx<'tx> {
             inner,
             freelist: tx.freelist.clone(),
             writable: true,
+            _phantom: PhantomData,
         })
     }
 
@@ -202,7 +205,7 @@ impl<'tx> Tx<'tx> {
     ///
     /// Will return an [`IncompatibleValue`](enum.Error.html#variant.IncompatibleValue) error if the key exists but is not a bucket,
     /// or a [`ReadOnlyTx`](enum.Error.html#variant.ReadOnlyTx) error if this is called on a read-only transaction.
-    pub fn get_or_create_bucket<'b, T: ToBytes<'tx>>(&'b self, name: T) -> Result<Bucket<'tx>> {
+    pub fn get_or_create_bucket<'b, T: ToBytes<'tx>>(&'b self, name: T) -> Result<Bucket<'b, 'tx>> {
         let tx = self.inner.borrow();
         if !tx.lock.writable() {
             return Err(Error::ReadOnlyTx);
@@ -213,6 +216,7 @@ impl<'tx> Tx<'tx> {
             inner,
             freelist: tx.freelist.clone(),
             writable: true,
+            _phantom: PhantomData,
         })
     }
 
@@ -235,12 +239,13 @@ impl<'tx> Tx<'tx> {
     }
 
     /// Iterator over the root level buckets
-    pub fn buckets<'b>(&'b self) -> Buckets<'tx> {
+    pub fn buckets<'b>(&'b self) -> Buckets<'b, 'tx> {
         let tx = self.inner.borrow();
         let bucket = Bucket {
             inner: tx.root.clone(),
             freelist: tx.freelist.clone(),
             writable: tx.lock.writable(),
+            _phantom: PhantomData,
         };
         Buckets { c: bucket.cursor() }
     }

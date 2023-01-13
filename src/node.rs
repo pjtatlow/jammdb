@@ -483,7 +483,7 @@ mod test {
 
     use crate::{
         testutil::{rand_bytes, RandomFile},
-        Bucket, OpenOptions,
+        OpenOptions,
     };
 
     use super::*;
@@ -492,12 +492,6 @@ mod test {
     fn test_split() -> Result<()> {
         let random_file = RandomFile::new();
         let db = OpenOptions::new().pagesize(1024).open(&random_file)?;
-        let b: Bucket;
-        {
-            let tx = db.tx(true)?;
-            b = tx.get_bucket("abc")?;
-        }
-        b.get("abc");
         // Test split
         {
             let tx = db.tx(true)?;

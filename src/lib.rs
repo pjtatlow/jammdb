@@ -110,6 +110,10 @@
 //!     Ok(())
 //! }
 //! ```
+//! This should fail
+//! ```compile_fail
+//! let a: u64 = 0_i32;
+//! ```
 //!
 
 mod bucket;
@@ -119,6 +123,7 @@ mod data;
 mod db;
 mod errors;
 mod freelist;
+mod lifetimes;
 mod meta;
 mod node;
 mod page;
@@ -134,6 +139,11 @@ pub use errors::*;
 pub use tx::Tx;
 
 #[cfg(test)]
+///
+/// ```
+/// let a: u64 = 0_i32;
+/// ```
+///
 mod testutil {
     use std::io::Write;
 

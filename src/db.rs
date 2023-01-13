@@ -161,9 +161,9 @@ impl DB {
         OpenOptions::new().open(path)
     }
 
-    /// Creates a [`Transaction`].
+    /// Creates a [`Tx`].
     /// This transaction is either read-only or writable depending on the `writable` parameter.
-    /// Please read the docs on a [`Transaction`] for more details.
+    /// Please read the docs on a [`Tx`] for more details.
     pub fn tx(&self, writable: bool) -> Result<Tx> {
         Tx::new(self, writable)
     }

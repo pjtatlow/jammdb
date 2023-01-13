@@ -1,5 +1,5 @@
 use bytes::{BufMut, Bytes, BytesMut};
-use jammdb::{Bucket, Error, OpenOptions};
+use jammdb::{Bucket, Error, OpenOptions, Tx};
 use rand::{distributions::Alphanumeric, prelude::*};
 use std::{
     collections::BTreeMap,
@@ -335,24 +335,22 @@ pub fn log_playback(name: &str) -> Result<(), Error> {
     let random_file = super::RandomFile::new();
 
     let db = OpenOptions::new().pagesize(1024).open(&random_file.path)?;
-    let mut data: FakeNode = FakeNode::Bucket(BTreeMap::new());
-    let mut data_b: &mut FakeNode = &mut data;
+    let mut root: FakeNode = FakeNode::Bucket(BTreeMap::new());
+    // let mut data_b: &mut FakeNode = &mut data;
 
     let mut tx = None;
-    let mut b: Option<Bucket> = None;
+    let mut bucket_path: Vec<Bytes> = Vec::new();
+    // let mut b: Option<Bucket> = None;
     let mut count = 0_u64;
     for instruction in instructions.iter() {
         count += 1;
         match instruction {
             Instruction::ResetBucket => {
-                b = None;
-                data_b = &mut data;
+                bucket_path.clear();
             }
             Instruction::StartTx => tx = Some(db.tx(true)?),
             Instruction::EndTx => {
-                // let _ = data_b.take();
-                data_b = &mut data;
-                let _ = b.take();
+                bucket_path.clear();
                 let tx = tx.take().unwrap();
 
                 tx.commit()?;
@@ -363,42 +361,76 @@ pub fn log_playback(name: &str) -> Result<(), Error> {
                     let tx = db.tx(false)?;
 
                     for (bucket_data, bucket) in tx.buckets() {
-                        let data = data_b.sub_bucket(Bytes::copy_from_slice(bucket_data.name()));
+                        let data = root.sub_bucket(Bytes::copy_from_slice(bucket_data.name()));
                         assert!(data.is_bucket());
                         let data_bucket = data.unwrap_bucket();
                         check_bucket(bucket, data_bucket)?;
                     }
                 }
             }
-            Instruction::SubBucket(name) => match b {
-                Some(current) => {
-                    data_b = data_b.sub_bucket(name.clone());
-                    b = Some(current.get_or_create_bucket(name)?);
-                }
-                None => {
-                    data_b = data.sub_bucket(name.clone());
-                    b = Some(tx.as_ref().unwrap().get_or_create_bucket(name)?)
-                }
-            },
+            Instruction::SubBucket(name) => {
+                bucket_path.push(name.clone());
+            }
             Instruction::InsertKV(k, v) => {
-                data_b
-                    .unwrap_bucket()
-                    .insert(k.clone(), FakeNode::Value(v.clone()));
-                b.as_ref().unwrap().put(k, v)?;
+                mutate_buckets(
+                    tx.as_ref().unwrap(),
+                    &mut root,
+                    &bucket_path,
+                    |bucket, data_bucket| {
+                        bucket.put(k, v)?;
+                        data_bucket.insert(k.clone(), FakeNode::Value(v.clone()));
+                        Ok(())
+                    },
+                )?;
             }
             Instruction::UpdateKV(k, v) => {
-                data_b
-                    .unwrap_bucket()
-                    .insert(k.clone(), FakeNode::Value(v.clone()));
-                b.as_ref().unwrap().put(k, v)?;
+                mutate_buckets(
+                    tx.as_ref().unwrap(),
+                    &mut root,
+                    &bucket_path,
+                    |bucket, data_bucket| {
+                        let existing = bucket.put(k, v)?;
+                        assert!(existing.is_some());
+                        data_bucket.insert(k.clone(), FakeNode::Value(v.clone()));
+                        Ok(())
+                    },
+                )?;
             }
             Instruction::DeleteKey(k) => {
-                data_b.unwrap_bucket().remove(k);
-
-                b.as_ref().unwrap().delete(k)?;
+                mutate_buckets(
+                    tx.as_ref().unwrap(),
+                    &mut root,
+                    &bucket_path,
+                    |bucket, data_bucket| {
+                        bucket.delete(k)?;
+                        data_bucket.remove(k);
+                        Ok(())
+                    },
+                )?;
             }
         }
     }
     let _ = count;
+    Ok(())
+}
+
+fn mutate_buckets<'b, 'tx, F>(
+    tx: &Tx<'tx>,
+    root: &mut FakeNode,
+    path: &Vec<Bytes>,
+    f: F,
+) -> Result<(), Error>
+where
+    F: Fn(&Bucket, &mut BTreeMap<Bytes, FakeNode>) -> Result<(), Error>,
+{
+    assert!(path.len() > 0);
+    let mut b = tx.get_or_create_bucket(&path[0])?;
+    let mut node = root.sub_bucket(path[0].clone());
+    for name in path[1..].iter() {
+        b = b.get_or_create_bucket(name)?;
+        node = node.sub_bucket(name.clone());
+    }
+    let data_bucket = node.unwrap_bucket();
+    f(&b, data_bucket)?;
     Ok(())
 }

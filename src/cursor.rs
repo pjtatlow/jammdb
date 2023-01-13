@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 use crate::{
     bucket::{Bucket, InnerBucket},
@@ -50,22 +50,24 @@ use crate::{
 /// # Ok(())
 /// # }
 /// ```
-pub struct Cursor<'b> {
-    bucket: Rc<RefCell<InnerBucket<'b>>>,
+pub struct Cursor<'b, 'tx> {
+    bucket: Rc<RefCell<InnerBucket<'tx>>>,
     freelist: Rc<RefCell<TxFreelist>>,
     writable: bool,
     stack: Vec<SearchPath>,
     next_called: bool,
+    _phantom: PhantomData<&'b ()>,
 }
 
-impl<'b> Cursor<'b> {
-    pub(crate) fn new(b: &Bucket<'b>) -> Cursor<'b> {
+impl<'b, 'tx> Cursor<'b, 'tx> {
+    pub(crate) fn new(b: &Bucket<'b, 'tx>) -> Cursor<'b, 'tx> {
         Cursor {
             bucket: b.inner.clone(),
             freelist: b.freelist.clone(),
             writable: b.writable,
             stack: Vec::new(),
             next_called: false,
+            _phantom: PhantomData,
         }
     }
 
@@ -84,7 +86,7 @@ impl<'b> Cursor<'b> {
 
     /// Returns the data at the cursor's current position.
     /// You can use this to get data after doing a [`seek`](#method.seek).
-    pub fn current<'a>(&'a self) -> Option<Data<'b>> {
+    pub fn current<'a>(&'a self) -> Option<Data<'tx>> {
         match self.stack.last() {
             Some(e) => {
                 let b = self.bucket.borrow_mut();
@@ -153,8 +155,8 @@ pub(crate) struct SearchPath {
     pub(crate) id: PageNodeID,
 }
 
-impl<'b> Iterator for Cursor<'b> {
-    type Item = Data<'b>;
+impl<'b, 'tx> Iterator for Cursor<'b, 'tx> {
+    type Item = Data<'tx>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.stack.is_empty() {
@@ -185,12 +187,12 @@ impl<'b> Iterator for Cursor<'b> {
 }
 
 /// An iterator over a bucket's sub-buckets.
-pub struct Buckets<'b> {
-    pub(crate) c: Cursor<'b>,
+pub struct Buckets<'b, 'tx> {
+    pub(crate) c: Cursor<'b, 'tx>,
 }
 
-impl<'b, 'tx: 'b> Iterator for Buckets<'b> {
-    type Item = (BucketData<'b>, Bucket<'b>);
+impl<'b, 'tx: 'b> Iterator for Buckets<'b, 'tx> {
+    type Item = (BucketData<'b>, Bucket<'b, 'tx>);
 
     fn next(&mut self) -> Option<Self::Item> {
         for data in self.c.by_ref() {
@@ -203,6 +205,7 @@ impl<'b, 'tx: 'b> Iterator for Buckets<'b> {
                             writable: self.c.writable,
                             freelist: self.c.freelist.clone(),
                             inner: r,
+                            _phantom: PhantomData,
                         },
                     ));
                 } else {
@@ -215,12 +218,12 @@ impl<'b, 'tx: 'b> Iterator for Buckets<'b> {
 }
 
 /// An iterator over a bucket's key / value pairs.
-pub struct KVPairs<'b> {
-    pub(crate) c: Cursor<'b>,
+pub struct KVPairs<'b, 'tx> {
+    pub(crate) c: Cursor<'b, 'tx>,
 }
 
-impl<'b> Iterator for KVPairs<'b> {
-    type Item = KVPair<'b>;
+impl<'b, 'tx> Iterator for KVPairs<'b, 'tx> {
+    type Item = KVPair<'tx>;
 
     fn next(&mut self) -> Option<Self::Item> {
         for data in self.c.by_ref() {

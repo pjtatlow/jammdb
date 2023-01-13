@@ -1,6 +1,7 @@
 use std::{
     cell::{RefCell, RefMut},
     collections::HashMap,
+    marker::PhantomData,
     rc::Rc,
 };
 
@@ -62,13 +63,14 @@ use crate::{
 /// # Ok(())
 /// # }
 /// ```
-pub struct Bucket<'b> {
-    pub(crate) inner: Rc<RefCell<InnerBucket<'b>>>,
+pub struct Bucket<'b, 'tx: 'b> {
+    pub(crate) inner: Rc<RefCell<InnerBucket<'tx>>>,
     pub(crate) freelist: Rc<RefCell<TxFreelist>>,
     pub(crate) writable: bool,
+    pub(crate) _phantom: PhantomData<&'b ()>,
 }
 
-impl<'b> Bucket<'b> {
+impl<'b, 'tx> Bucket<'b, 'tx> {
     /// Adds to or replaces key / value data in the bucket.
     /// Returns an error if the key currently exists but is a bucket instead of a key / value pair.
     ///
@@ -98,7 +100,11 @@ impl<'b> Bucket<'b> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn put<T: ToBytes<'b>, S: ToBytes<'b>>(&self, key: T, value: S) -> Result<Option<KVPair>> {
+    pub fn put<'a, T: ToBytes<'tx>, S: ToBytes<'tx>>(
+        &'a self,
+        key: T,
+        value: S,
+    ) -> Result<Option<KVPair<'tx>>> {
         if !self.writable {
             return Err(Error::ReadOnlyTx);
         }
@@ -175,13 +181,14 @@ impl<'b> Bucket<'b> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn get_bucket<'a, T: ToBytes<'b>>(&'a self, name: T) -> Result<Bucket<'b>> {
+    pub fn get_bucket<'a, T: ToBytes<'tx>>(&'a self, name: T) -> Result<Bucket<'b, 'tx>> {
         let mut b = self.inner.borrow_mut();
         let inner = b.get_bucket(name)?;
         Ok(Bucket {
             inner,
             freelist: self.freelist.clone(),
             writable: self.writable,
+            _phantom: PhantomData,
         })
     }
 
@@ -213,7 +220,7 @@ impl<'b> Bucket<'b> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn create_bucket<'a, T: ToBytes<'b>>(&'a self, name: T) -> Result<Bucket<'b>> {
+    pub fn create_bucket<'a, T: ToBytes<'tx>>(&'a self, name: T) -> Result<Bucket<'b, 'tx>> {
         if !self.writable {
             return Err(Error::ReadOnlyTx);
         }
@@ -223,6 +230,7 @@ impl<'b> Bucket<'b> {
             inner,
             freelist: self.freelist.clone(),
             writable: self.writable,
+            _phantom: PhantomData,
         })
     }
 
@@ -254,7 +262,7 @@ impl<'b> Bucket<'b> {
     /// # Ok(())
     /// # }
     /// ```    
-    pub fn get_or_create_bucket<'a, T: ToBytes<'b>>(&'a self, name: T) -> Result<Bucket<'b>> {
+    pub fn get_or_create_bucket<'a, T: ToBytes<'tx>>(&'a self, name: T) -> Result<Bucket<'b, 'tx>> {
         if !self.writable {
             return Err(Error::ReadOnlyTx);
         }
@@ -264,6 +272,7 @@ impl<'b> Bucket<'b> {
             inner,
             freelist: self.freelist.clone(),
             writable: self.writable,
+            _phantom: PhantomData,
         })
     }
 
@@ -293,7 +302,7 @@ impl<'b> Bucket<'b> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn delete_bucket<T: ToBytes<'b>>(&self, key: T) -> Result<()> {
+    pub fn delete_bucket<T: ToBytes<'tx>>(&self, key: T) -> Result<()> {
         if !self.writable {
             return Err(Error::ReadOnlyTx);
         }
@@ -328,7 +337,7 @@ impl<'b> Bucket<'b> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn cursor<'a>(&'a self) -> Cursor<'b> {
+    pub fn cursor<'a>(&'a self) -> Cursor<'b, 'tx> {
         Cursor::new(self)
     }
 
@@ -373,12 +382,12 @@ impl<'b> Bucket<'b> {
     }
 
     /// Iterator over the sub-buckets in this bucket.
-    pub fn buckets<'a>(&'a self) -> Buckets<'b> {
+    pub fn buckets<'a>(&'a self) -> Buckets<'b, 'tx> {
         Buckets { c: self.cursor() }
     }
 
     /// Iterator over the key / value pairs in this bucket.
-    pub fn kv_pairs<'a>(&'a self) -> KVPairs<'b> {
+    pub fn kv_pairs<'a>(&'a self) -> KVPairs<'b, 'tx> {
         KVPairs { c: self.cursor() }
     }
 }
