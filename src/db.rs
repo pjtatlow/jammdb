@@ -1,5 +1,5 @@
 use memmap2::Mmap;
-use page_size::get as getPageSize;
+use page_size::get as get_page_size;
 use std::{
     fs::{File, OpenOptions as FileOpenOptions},
     io::Write,
@@ -115,7 +115,7 @@ impl OpenOptions {
 
 impl Default for OpenOptions {
     fn default() -> Self {
-        let pagesize = getPageSize() as u64;
+        let pagesize = get_page_size() as u64;
         if pagesize < 1024 {
             panic!("Pagesize must be 1024 bytes minimum");
         }
@@ -337,7 +337,7 @@ mod tests {
 
     #[test]
     fn test_open_options() {
-        assert_ne!(getPageSize(), 5000);
+        assert_ne!(get_page_size(), 5000);
         let random_file = RandomFile::new();
         {
             let db = OpenOptions::new()
@@ -377,7 +377,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_different_pagesizes() {
-        assert_ne!(getPageSize(), 5000);
+        assert_ne!(get_page_size(), 5000);
         let random_file = RandomFile::new();
         {
             let db = OpenOptions::new()

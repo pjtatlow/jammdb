@@ -36,10 +36,14 @@ impl Pages {
 #[repr(C)]
 #[derive(Debug)]
 pub(crate) struct Page {
+    // id * pagesize is the offset from the beginning of the file
     pub(crate) id: PageID,
     pub(crate) page_type: PageType,
+    // Number of elements on this page, the type of element depends on the pageType
     pub(crate) count: u64,
+    // Number of additional pages after this one that are part of this block
     pub(crate) overflow: u64,
+    // ptr serves as a reference to where the actual data starts
     pub(crate) ptr: u64,
 }
 
@@ -123,9 +127,9 @@ impl Page {
     }
 
     pub(crate) fn write_node(&mut self, n: &Node, num_pages: u64) -> Result<()> {
-        self.id = n.page_id;
+        debug_assert!(self.id == n.page_id);
+        debug_assert!(self.overflow == num_pages - 1);
         self.count = n.data.len() as u64;
-        self.overflow = num_pages - 1;
         let header_size;
         let mut data_size: u64 = 0;
         let mut data: Vec<&[u8]>;
@@ -137,7 +141,7 @@ impl Page {
                 data = Vec::with_capacity(self.count as usize);
                 let elems = self.branch_elements_mut();
                 for (b, elem) in branches.iter().zip(elems.iter_mut()) {
-                    debug_assert!(b.page != 0, "PAGE SHOULD NOT BE ZERO!");
+                    debug_assert!(b.page > 1, "Branch should not point to page {}", b.page);
                     elem.page = b.page;
                     elem.key_size = b.key_size() as u64;
                     elem.pos = header_offsets + data_size;

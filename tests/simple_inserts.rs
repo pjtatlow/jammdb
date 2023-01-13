@@ -4,6 +4,12 @@ use rand::prelude::*;
 mod common;
 
 #[test]
+fn super_simple() -> Result<(), Error> {
+    test_insert((0..=1).collect())?;
+    Ok(())
+}
+
+#[test]
 fn small_insert() -> Result<(), Error> {
     test_insert((0..=100).collect())?;
     test_insert((0..=100).collect())?;

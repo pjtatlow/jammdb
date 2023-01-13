@@ -135,6 +135,9 @@ pub use tx::Tx;
 
 #[cfg(test)]
 mod testutil {
+    use std::io::Write;
+
+    use bytes::{BufMut, Bytes, BytesMut};
     use rand::{distributions::Alphanumeric, Rng};
 
     pub struct RandomFile {
@@ -177,5 +180,16 @@ mod testutil {
         fn drop(&mut self) {
             let _ = std::fs::remove_file(&self.path);
         }
+    }
+
+    pub fn rand_bytes(size: usize) -> Bytes {
+        let buf = BytesMut::new();
+        let mut w = buf.writer();
+        for byte in rand::thread_rng().sample_iter(&Alphanumeric).take(size) {
+            let _ = write!(&mut w, "{}", byte);
+            // let _ = w.write(&[byte]);
+        }
+
+        w.into_inner().freeze()
     }
 }

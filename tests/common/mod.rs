@@ -1,3 +1,5 @@
+#[allow(dead_code)]
+pub mod record;
 use rand::{distributions::Alphanumeric, Rng};
 
 pub struct RandomFile {

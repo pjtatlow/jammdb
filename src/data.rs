@@ -54,7 +54,7 @@ impl<'a> Data<'a> {
         }
     }
 
-    pub(crate) fn key_parts<'b>(&'b self) -> Bytes<'a> {
+    pub(crate) fn key_bytes<'b>(&'b self) -> Bytes<'a> {
         match self {
             Data::Bucket(b) => b.name.clone(),
             Data::KeyValue(kv) => kv.key.clone(),
@@ -269,7 +269,7 @@ mod tests {
         let data: Data = Data::KeyValue(KVPair::new(Bytes::Slice(&k), Bytes::Slice(&v)));
 
         assert_eq!(data.node_type(), Node::TYPE_DATA);
-        assert_eq!(data.key_parts(), Bytes::Slice(&k));
+        assert_eq!(data.key_bytes(), Bytes::Slice(&k));
         assert_eq!(data.key(), &k[..]);
         assert_eq!(data.value(), &v[..]);
         assert_eq!(data.size(), 16);
@@ -281,7 +281,7 @@ mod tests {
         let data: Data = Data::Bucket(BucketData::new(Bytes::Slice(&k), meta));
 
         assert_eq!(data.node_type(), Node::TYPE_BUCKET);
-        assert_eq!(data.key_parts(), Bytes::Slice(&k));
+        assert_eq!(data.key_bytes(), Bytes::Slice(&k));
         assert_eq!(data.key(), &k[..]);
         assert_eq!(data.value(), meta.as_ref());
         assert_eq!(data.size(), 8 + std::mem::size_of_val(&meta));

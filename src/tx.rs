@@ -258,10 +258,12 @@ impl<'tx> Tx<'tx> {
         let mut tx = self.inner.borrow_mut();
         let freelist = tx.freelist.clone();
         let mut freelist = freelist.borrow_mut();
-        {
+        let meta = {
             let mut root = tx.root.borrow_mut();
             root.rebalance(&mut freelist)?;
-        }
+            root.spill(&mut freelist)?
+        };
+        tx.meta.root = meta;
         tx.write_data(&mut freelist)
     }
 
@@ -273,14 +275,23 @@ impl<'tx> Tx<'tx> {
 impl<'tx> TxInner<'tx> {
     fn write_data(&mut self, freelist: &mut TxFreelist) -> Result<()> {
         if let TxLock::Rw(file) = &mut self.lock {
-            // Allocate space for the freelist
-            freelist.free(self.meta.freelist_page, self.num_freelist_pages);
-            let freelist_size = freelist.inner.size();
-            let freelist_allocation = freelist.allocate(freelist_size);
+            // Write the freelist to a new page
+            {
+                freelist.free(self.meta.freelist_page, self.num_freelist_pages);
+                let freelist_size = freelist.inner.size();
+                let page = freelist.allocate(freelist_size);
+                self.meta.freelist_page = page.id;
+                let free_page_ids = freelist.inner.pages();
+                page.page_type = Page::TYPE_FREELIST;
+                page.count = free_page_ids.len() as u64;
+                page.freelist_mut()
+                    .copy_from_slice(free_page_ids.as_slice());
+            }
 
             // Update our num_pages from the freelist now that we've allocated everything
             self.meta.num_pages = freelist.meta.num_pages;
 
+            // Grow the file, if needed
             let required_size = (self.meta.num_pages * self.db.inner.pagesize) as u64;
             let current_size = file.metadata()?.len();
             if current_size < required_size {
@@ -291,30 +302,13 @@ impl<'tx> TxInner<'tx> {
 
             // write the data to the file
             {
-                let root = self.root.borrow_mut();
-                root.write(&mut *file)?;
-                self.meta.root = root.meta;
-            }
-
-            // write freelist to file
-            {
-                let (page_id, num_pages) = freelist_allocation;
-                let page_ids = freelist.inner.pages();
-
-                let mut buf = vec![0; freelist_size as usize];
-
-                #[allow(clippy::cast_ptr_alignment)]
-                let mut page = unsafe { &mut *(&mut buf[0] as *mut u8 as *mut Page) };
-                page.id = page_id;
-                page.overflow = num_pages - 1;
-                page.page_type = Page::TYPE_FREELIST;
-                page.count = page_ids.len() as u64;
-                page.freelist_mut().copy_from_slice(page_ids.as_slice());
-
-                file.seek(SeekFrom::Start((self.db.inner.pagesize * page_id) as u64))?;
-                file.write_all(buf.as_slice())?;
-
-                self.meta.freelist_page = page_id;
+                // freelist.pages is a BTreeMap so we're writing the pages in order to minmize
+                // the random seeks.
+                for (page_id, (ptr, size)) in freelist.pages.iter() {
+                    let buf = unsafe { std::slice::from_raw_parts(ptr.as_ptr(), *size) };
+                    file.seek(SeekFrom::Start((self.db.inner.pagesize * page_id) as u64))?;
+                    file.write_all(buf)?;
+                }
             }
 
             // write meta page to file
@@ -390,7 +384,7 @@ impl<'tx> TxInner<'tx> {
                         if let Some(last) = last {
                             if last >= b.key() {
                                 return Err(Error::InvalidDB(format!(
-                                    "Page {} contains unsorted elements",
+                                    "Branch page {} contains unsorted elements",
                                     page_id
                                 )));
                             }
@@ -420,8 +414,11 @@ impl<'tx> TxInner<'tx> {
                         // Make sure all leaf elements are in order
                         if let Some(last) = last {
                             if last >= leaf.key() {
+                                // let keys: Vec<&[u8]> =
+                                //     page.leaf_elements().iter().map(|l| l.key()).collect();
+                                // let key = leaf.key();
                                 return Err(Error::InvalidDB(format!(
-                                    "Page {} contains unsorted elements",
+                                    "Leaf page {} contains unsorted elements",
                                     page_id
                                 )));
                             }
@@ -485,6 +482,8 @@ impl<'tx> Drop for TxInner<'tx> {
 
 #[cfg(test)]
 mod tests {
+    use std::mem::size_of;
+
     use super::*;
     use crate::db::{OpenOptions, DB};
     use crate::testutil::RandomFile;
@@ -574,14 +573,31 @@ mod tests {
             assert_eq!(freelist.inner.pages(), vec![2, 3, 4, 5, 6]);
             // allocate some pages from the freelist
             assert_eq!(freelist.meta.num_pages, 10);
-            assert_eq!(freelist.allocate(1), (2, 1));
-            assert_eq!(freelist.allocate(1), (3, 1));
-            assert_eq!(freelist.allocate(1), (4, 1));
-            assert_eq!(freelist.allocate(1), (5, 1));
-            assert_eq!(freelist.allocate(1), (6, 1));
+            let page = freelist.allocate(size_of::<Page>() as u64);
+            assert!(page.id == 2);
+            assert!(page.overflow == 0);
+
+            let page = freelist.allocate(size_of::<Page>() as u64);
+            assert!(page.id == 3);
+            assert!(page.overflow == 0);
+
+            let page = freelist.allocate(size_of::<Page>() as u64);
+            assert!(page.id == 4);
+            assert!(page.overflow == 0);
+
+            let page = freelist.allocate(size_of::<Page>() as u64);
+            assert!(page.id == 5);
+            assert!(page.overflow == 0);
+
+            let page = freelist.allocate(size_of::<Page>() as u64);
+            assert!(page.id == 6);
+            assert!(page.overflow == 0);
+
             // freelist should be empty so make sure the page is new
             assert_eq!(freelist.meta.num_pages, 10);
-            assert_eq!(freelist.allocate(1), (10, 1));
+            let page = freelist.allocate(size_of::<Page>() as u64);
+            assert!(page.id == 10);
+            assert!(page.overflow == 0);
             assert_eq!(freelist.meta.num_pages, 11);
             assert_eq!(freelist.inner.pages(), vec![]);
         }

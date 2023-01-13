@@ -1,7 +1,6 @@
 use std::{
     cell::{RefCell, RefMut},
     collections::HashMap,
-    fs::File,
     rc::Rc,
 };
 
@@ -11,7 +10,7 @@ use crate::{
     data::{BucketData, Data, KVPair},
     errors::{Error, Result},
     freelist::TxFreelist,
-    node::{Branch, Node, NodeData, NodeID},
+    node::{Node, NodeData, NodeID},
     page::{Page, PageID, Pages},
     page_node::{PageNode, PageNodeID},
 };
@@ -69,7 +68,7 @@ pub struct Bucket<'b> {
     pub(crate) writable: bool,
 }
 
-impl<'b, 'tx: 'b> Bucket<'b> {
+impl<'b> Bucket<'b> {
     /// Adds to or replaces key / value data in the bucket.
     /// Returns an error if the key currently exists but is a bucket instead of a key / value pair.
     ///
@@ -389,7 +388,9 @@ pub(crate) struct InnerBucket<'b> {
     dirty: bool,
     buckets: HashMap<Bytes<'b>, Rc<RefCell<InnerBucket<'b>>>>,
     pub(crate) nodes: Vec<Rc<RefCell<Node<'b>>>>,
+    // Maps a PageID to it's NodeID, so we don't create multiple nodes for a single page
     page_node_ids: HashMap<PageID, NodeID>,
+    // Maps PageIDs to their parent's PageID
     page_parents: HashMap<PageID, PageID>,
     pages: Pages,
     pub(crate) meta: BucketMeta,
@@ -689,13 +690,16 @@ impl<'b> InnerBucket<'b> {
                 // If this node is not for the root page, then recursively create nodes for the parent pages
                 if self.meta.root_page != page_id {
                     let n = self.nodes[node_id as usize].clone();
-                    let n = n.borrow();
-                    let node_key = n.data.key_parts();
+                    let mut n = n.borrow_mut();
+                    let node_key = n.data.first_key();
                     if let Some(parent) = parent {
                         parent.insert_child(node_id, node_key);
+                        n.parent = Some(parent.id);
                     } else {
                         let parent = self.node(PageNodeID::Page(self.page_parents[&page_id]), None);
-                        parent.borrow_mut().insert_child(node_id, node_key);
+                        let mut parent = parent.borrow_mut();
+                        parent.insert_child(node_id, node_key);
+                        n.parent = Some(parent.id);
                     }
                 }
                 node_id
@@ -706,6 +710,7 @@ impl<'b> InnerBucket<'b> {
     }
 
     pub(crate) fn new_node<'a>(&'a mut self, data: NodeData<'b>) -> Rc<RefCell<Node<'b>>> {
+        debug_assert!(data.len() >= 2);
         let node_id = self.nodes.len() as u64;
         let n = Node::with_data(node_id, data, self.pages.pagesize);
         self.nodes.push(Rc::new(RefCell::new(n)));
@@ -727,53 +732,28 @@ impl<'b> InnerBucket<'b> {
         self.dirty
     }
 
-    pub(crate) fn rebalance(&mut self, tx_freelist: &mut TxFreelist) -> Result<BucketMeta> {
-        #[allow(clippy::mutable_key_type)]
-        let mut bucket_metas: HashMap<Bytes, BucketMeta> = HashMap::new();
-        for (key, b) in self.buckets.iter() {
+    // Make sure none of the nodes are too empty
+    pub(crate) fn rebalance(&mut self, tx_freelist: &mut TxFreelist) -> Result<()> {
+        if !self.is_dirty() {
+            return Ok(());
+        }
+        for b in self.buckets.values() {
             let mut b = b.borrow_mut();
-            if b.is_dirty() {
-                self.dirty = true;
-                let bucket_meta = b.rebalance(tx_freelist)?;
-                bucket_metas.insert(key.clone(), bucket_meta);
-            }
+            b.rebalance(tx_freelist)?;
         }
-        for (name, meta) in bucket_metas {
-            self.put_data(Data::Bucket(BucketData::new(name, meta)))?;
-        }
-        if self.dirty {
-            // merge emptyish nodes first
-            self.merge_nodes(tx_freelist);
 
-            // split overflowing nodes
-            {
-                let mut root_node = self.node(self.root, None);
-                let mut root_page_id;
-                loop {
-                    let mut node = root_node.borrow_mut();
-                    let split = node.split(self, tx_freelist);
-                    root_page_id = node.page_id;
-                    if let Some(mut branches) = split {
-                        branches.insert(0, Branch::from_node(&node));
-                        drop(node);
-                        root_node = self.new_node(NodeData::Branches(branches));
-                    } else {
-                        break;
-                    }
-                }
-                let page_id = root_page_id;
-                self.root = PageNodeID::Node(root_page_id);
-                debug_assert!(
-                    page_id > 1,
-                    "cannot have page <= 1, those are reserved for metadata"
-                );
-                self.meta.root_page = page_id;
-            }
-        }
-        Ok(self.meta)
+        // merge emptyish nodes with siblings
+        self.merge_nodes(tx_freelist);
+
+        Ok(())
     }
 
     fn merge_nodes(&mut self, tx_freelist: &mut TxFreelist) {
+        // If we haven't initialized any nodes yet, make sure we have the root node.
+        // If there is even one node, we are guarunteed to hage loaded the root node too.
+        if self.page_node_ids.len() == 0 {
+            self.node(PageNodeID::Page(self.meta.root_page), None);
+        }
         let mut stack: Vec<(bool, u64)> = vec![(false, self.page_node_ids[&self.meta.root_page])];
 
         while let Some((visited, node_id)) = stack.pop() {
@@ -809,8 +789,8 @@ impl<'b> InnerBucket<'b> {
                     }
                 } else {
                     // else find a sibling and merge this node with that one
-                    let parent_id = *self.page_parents.get(&node.page_id).unwrap();
-                    let parent_ref = self.node(PageNodeID::Page(parent_id), None);
+                    let parent_id = node.parent.expect("non root node must have parent");
+                    let parent_ref = self.nodes[parent_id as usize].clone();
 
                     // borrow the parent in a separate scope so we can drop it before we initialize the sibling node
                     let mut parent = parent_ref.borrow_mut();
@@ -840,10 +820,21 @@ impl<'b> InnerBucket<'b> {
                                 // left sibling
                                 branches[index - 1].page
                             };
+
+                            self.page_parents.insert(sibling_page, parent.page_id);
                             let sibling =
                                 self.node(PageNodeID::Page(sibling_page), Some(&mut parent));
+
                             let mut sibling = sibling.borrow_mut();
+                            // Copy this node's data over to it's sibling
                             sibling.data.merge(&mut node.data);
+                            // Move all children nodes over to that sibling too
+                            for child in node.children.iter() {
+                                let c = &mut self.nodes[*child as usize];
+                                let mut c = c.borrow_mut();
+                                c.parent = Some(sibling.id);
+                            }
+                            sibling.children.append(&mut node.children);
                         }
                         // free the child's page and mark it as deleted
                         node.free_page(tx_freelist);
@@ -869,20 +860,34 @@ impl<'b> InnerBucket<'b> {
         }
     }
 
-    pub(crate) fn write(&self, file: &mut File) -> Result<()> {
-        for (_, b) in self.buckets.iter() {
-            let b = b.borrow();
-            b.write(file)?;
+    // Make sure none of the nodes are too full, creating other nodes as needed.
+    // Then, write all of those nodes to dirty pages.
+    pub(crate) fn spill(&mut self, tx_freelist: &mut TxFreelist) -> Result<BucketMeta> {
+        if !self.is_dirty() {
+            return Ok(self.meta);
         }
-        if self.dirty {
-            for node in self.nodes.iter() {
-                let node = node.borrow_mut();
-                if !node.deleted {
-                    node.write(file)?;
-                }
-            }
+
+        #[allow(clippy::mutable_key_type)]
+        let mut bucket_metas: HashMap<Bytes, BucketMeta> = HashMap::new();
+        for (key, b) in self.buckets.iter() {
+            let mut b = b.borrow_mut();
+            let bucket_meta = b.spill(tx_freelist)?;
+            // Store updated bucket metadata in a map since self is borrowed
+            bucket_metas.insert(key.clone(), bucket_meta);
         }
-        Ok(())
+        // Update our pointers to the sub-buckets' new pages
+        for (name, meta) in bucket_metas {
+            self.put_data(Data::Bucket(BucketData::new(name, meta)))?;
+        }
+
+        let root = self.nodes[self.page_node_ids[&self.meta.root_page] as usize].clone();
+        let mut root = root.borrow_mut();
+        let page_id = root
+            .spill(self, tx_freelist, None)?
+            .expect("root node did not return a new page_id");
+        self.meta.root_page = page_id;
+
+        Ok(self.meta)
     }
 }
 
