@@ -134,6 +134,44 @@ fn delete_simple_bucket() -> Result<(), Error> {
 }
 
 #[test]
+fn delete_nested_bucket() -> Result<(), Error> {
+    let random_file = common::RandomFile::new();
+    let db = OpenOptions::new()
+        .strict_mode(true)
+        .open(&random_file.path)?;
+    {
+        let tx = db.tx(true)?;
+        let b = tx.create_bucket("abc")?;
+        let b = b.create_bucket("def")?;
+        for i in 0..10_u64 {
+            b.put(i.to_be_bytes(), i.to_string())?;
+        }
+        tx.commit()?;
+    }
+    {
+        let tx = db.tx(true)?;
+        let b = tx.get_bucket("abc")?;
+        b.delete_bucket("def")?;
+        assert_eq!(b.get_bucket("def").err(), Some(Error::BucketMissing));
+        // delete a freshly created bucket
+        {
+            let b = b.create_bucket("ghi")?;
+            b.put("some", "data")?;
+        }
+        b.delete_bucket("ghi")?;
+
+        tx.commit()?;
+    }
+    {
+        let tx = db.tx(false)?;
+        let b = tx.get_bucket("abc")?;
+        assert_eq!(b.get_bucket("def").err(), Some(Error::BucketMissing));
+        assert_eq!(b.get_bucket("ghi").err(), Some(Error::BucketMissing));
+    }
+    db.check()
+}
+
+#[test]
 fn delete_large_bucket_with_large_nested_buckets() -> Result<(), Error> {
     let random_file = common::RandomFile::new();
     let db = OpenOptions::new()

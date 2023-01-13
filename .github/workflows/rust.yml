@@ -25,6 +25,32 @@ jobs:
           cargo fmt --check
           cargo clippy $CLIPPY_OPTS
 
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable-x86_64-unknown-linux-gnu
+          components: llvm-tools-preview
+
+      - name: Download grcov
+        run: |
+          mkdir -p "${HOME}/.local/bin"
+          curl -sL https://github.com/mozilla/grcov/releases/download/v0.8.10/grcov-x86_64-unknown-linux-gnu.tar.bz2 | tar jxf - -C "${HOME}/.local/bin"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          mkdir -p target/coverage
+          CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test
+          grcov . --binary-path ./target/debug/deps/ -s . -t lcov --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/tests.lcov
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v3
+        with:
+          files: target/coverage/*.lcov
+
   test-windows:
     runs-on: windows-latest
     strategy:

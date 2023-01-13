@@ -43,15 +43,6 @@ impl<'a> Bytes<'a> {
             Self::String(s) => s.len(),
         }
     }
-
-    pub fn ptr(&self) -> *const u8 {
-        match self {
-            Self::Slice(s) => s[0] as *const u8,
-            Self::Bytes(b) => &b[0] as *const u8,
-            Self::Vec(v) => &v[0] as *const u8,
-            Self::String(s) => &s.as_bytes()[0] as *const u8,
-        }
-    }
 }
 
 impl<'a> AsRef<[u8]> for Bytes<'a> {

@@ -154,12 +154,6 @@ mod testutil {
         pub path: std::path::PathBuf,
     }
 
-    impl Default for RandomFile {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
-
     impl RandomFile {
         pub fn new() -> RandomFile {
             loop {
@@ -173,7 +167,7 @@ mod testutil {
                 .unwrap()
                 .into();
                 let path = std::env::temp_dir().join(filename);
-                if path.metadata().is_err() {
+                if !path.exists() {
                     return RandomFile { path };
                 }
             }
