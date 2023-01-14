@@ -35,7 +35,7 @@ macro_rules! byte_array_to_bytes {
 // We don't want to automatically copy arrays of any length,
 // but for concenience, we'll copy arrays for integer sizes
 // so that if you do i.to_be_bytes() it will work for any int.
-byte_array_to_bytes!(1, 2, 4, 8, 16);
+byte_array_to_bytes!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16);
 
 impl<'a> ToBytes<'a> for String {
     fn to_bytes(self) -> Bytes<'a> {
