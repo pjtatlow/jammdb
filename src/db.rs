@@ -234,7 +234,7 @@ impl DBInner {
         file.allocate(new_size)?;
         let _lock = self.mmap_lock.write()?;
         let mut data = self.data.lock()?;
-        let mmap = mmap(&file)?;
+        let mmap = mmap(file)?;
         *data = Arc::new(mmap);
         Ok(data.clone())
     }
@@ -246,7 +246,7 @@ impl DBInner {
         // Double check that we have the right pagesize before we read the second page.
         if meta1.valid() && meta1.pagesize != self.pagesize {
             assert_eq!(
-                meta1.pagesize as u64, self.pagesize,
+                meta1.pagesize, self.pagesize,
                 "Invalid pagesize from meta1 {}. Expected {}.",
                 meta1.pagesize, self.pagesize
             );
@@ -256,12 +256,12 @@ impl DBInner {
         let meta = match (meta1.valid(), meta2.valid()) {
             (true, true) => {
                 assert_eq!(
-                    meta1.pagesize as u64, self.pagesize,
+                    meta1.pagesize, self.pagesize,
                     "Invalid pagesize from meta1 {}. Expected {}.",
                     meta1.pagesize, self.pagesize
                 );
                 assert_eq!(
-                    meta2.pagesize as u64, self.pagesize,
+                    meta2.pagesize, self.pagesize,
                     "Invalid pagesize from meta2 {}. Expected {}.",
                     meta2.pagesize, self.pagesize
                 );
@@ -273,7 +273,7 @@ impl DBInner {
             }
             (true, false) => {
                 assert_eq!(
-                    meta1.pagesize as u64, self.pagesize,
+                    meta1.pagesize, self.pagesize,
                     "Invalid pagesize from meta1 {}. Expected {}.",
                     meta1.pagesize, self.pagesize
                 );
@@ -281,7 +281,7 @@ impl DBInner {
             }
             (false, true) => {
                 assert_eq!(
-                    meta2.pagesize as u64, self.pagesize,
+                    meta2.pagesize, self.pagesize,
                     "Invalid pagesize from meta2 {}. Expected {}.",
                     meta2.pagesize, self.pagesize
                 );

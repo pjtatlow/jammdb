@@ -216,9 +216,7 @@ fn check_cursor(seek_to: &str, expected_fruits: &[&str], b: &Bucket, start_index
 fn root_buckets() -> Result<(), Error> {
     let random_file = common::RandomFile::new();
     {
-        let db = OpenOptions::new()
-            .strict_mode(true)
-            .open(&random_file.path)?;
+        let db = OpenOptions::new().strict_mode(true).open(&random_file)?;
         {
             let tx = db.tx(true)?;
             {
@@ -262,9 +260,7 @@ fn kv_iter() -> Result<(), Error> {
     let random_file = common::RandomFile::new();
     let data = vec![("abc", "one"), ("def", "two"), ("ghi", "three")];
     {
-        let db = OpenOptions::new()
-            .strict_mode(true)
-            .open(&random_file.path)?;
+        let db = OpenOptions::new().strict_mode(true).open(&random_file)?;
         {
             let tx = db.tx(true)?;
             {

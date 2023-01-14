@@ -116,6 +116,7 @@
 //! ```
 //!
 
+#[allow(clippy::mutable_key_type)]
 mod bucket;
 mod bytes;
 mod cursor;

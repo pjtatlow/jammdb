@@ -38,7 +38,7 @@ impl TestDetails {
         let db = OpenOptions::new()
             .pagesize(self.page_size as u64)
             .strict_mode(true)
-            .open(&random_file.path)?;
+            .open(&random_file)?;
 
         let mut instructions = Instructions::new(self.name)?;
 
@@ -68,7 +68,7 @@ impl TestDetails {
                         data = data.sub_bucket(bytes);
                     }
                     let data = data.unwrap_bucket();
-                    let was_empty = data.len() == 0;
+                    let was_empty = data.is_empty();
                     let existing_keys: Vec<Bytes> = data
                         .iter()
                         .filter_map(|(k, v)| match v {
@@ -223,7 +223,7 @@ impl FakeNode {
     fn sub_bucket(&mut self, name: Bytes) -> &mut FakeNode {
         match self {
             Self::Bucket(b) => {
-                if let None = b.get(&name) {
+                if b.get(&name).is_none() {
                     b.insert(name.clone(), FakeNode::Bucket(BTreeMap::new()));
                 }
                 return b.get_mut(&name).unwrap();
@@ -320,7 +320,7 @@ impl Drop for Instructions {
     fn drop(&mut self) {
         if self.delete && self.path.is_some() {
             self.f = None;
-            let _ = std::fs::remove_file(&self.path.as_ref().unwrap());
+            let _ = std::fs::remove_file(self.path.as_ref().unwrap());
         }
     }
 }
@@ -335,7 +335,7 @@ pub fn log_playback(name: &str) -> Result<(), Error> {
 
     let random_file = super::RandomFile::new();
 
-    let db = OpenOptions::new().pagesize(1024).open(&random_file.path)?;
+    let db = OpenOptions::new().pagesize(1024).open(&random_file)?;
     let mut root: FakeNode = FakeNode::Bucket(BTreeMap::new());
     // let mut data_b: &mut FakeNode = &mut data;
 
@@ -415,7 +415,7 @@ pub fn log_playback(name: &str) -> Result<(), Error> {
     Ok(())
 }
 
-fn mutate_buckets<'b, 'tx, F>(
+fn mutate_buckets<'tx, F>(
     tx: &Tx<'tx>,
     root: &mut FakeNode,
     path: &Vec<Bytes>,
@@ -424,7 +424,7 @@ fn mutate_buckets<'b, 'tx, F>(
 where
     F: Fn(&Bucket, &mut BTreeMap<Bytes, FakeNode>) -> Result<(), Error>,
 {
-    assert!(path.len() > 0);
+    assert!(!path.is_empty());
     let mut b = tx.get_or_create_bucket(&path[0])?;
     let mut node = root.sub_bucket(path[0].clone());
     for name in path[1..].iter() {

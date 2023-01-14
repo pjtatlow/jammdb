@@ -30,9 +30,7 @@ fn test_deletes(highest_int: u64) -> Result<(), Error> {
     let mut deleted: HashSet<u64> = HashSet::new();
     let mut rng = rand::thread_rng();
     {
-        let db = OpenOptions::new()
-            .strict_mode(true)
-            .open(&random_file.path)?;
+        let db = OpenOptions::new().strict_mode(true).open(&random_file)?;
         {
             let tx = db.tx(true)?;
             let b = tx.create_bucket("abc")?;
@@ -103,9 +101,7 @@ fn test_deletes(highest_int: u64) -> Result<(), Error> {
 #[test]
 fn delete_simple_bucket() -> Result<(), Error> {
     let random_file = common::RandomFile::new();
-    let db = OpenOptions::new()
-        .strict_mode(true)
-        .open(&random_file.path)?;
+    let db = OpenOptions::new().strict_mode(true).open(&random_file)?;
     {
         let tx = db.tx(true)?;
         let b = tx.create_bucket("abc")?;
@@ -136,9 +132,7 @@ fn delete_simple_bucket() -> Result<(), Error> {
 #[test]
 fn delete_nested_bucket() -> Result<(), Error> {
     let random_file = common::RandomFile::new();
-    let db = OpenOptions::new()
-        .strict_mode(true)
-        .open(&random_file.path)?;
+    let db = OpenOptions::new().strict_mode(true).open(&random_file)?;
     {
         let tx = db.tx(true)?;
         let b = tx.create_bucket("abc")?;
@@ -174,9 +168,7 @@ fn delete_nested_bucket() -> Result<(), Error> {
 #[test]
 fn delete_large_bucket_with_large_nested_buckets() -> Result<(), Error> {
     let random_file = common::RandomFile::new();
-    let db = OpenOptions::new()
-        .strict_mode(true)
-        .open(&random_file.path)?;
+    let db = OpenOptions::new().strict_mode(true).open(&random_file)?;
     {
         let tx = db.tx(true)?;
         let b = tx.create_bucket("abc")?;

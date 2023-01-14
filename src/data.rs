@@ -54,9 +54,9 @@ impl<'b, 'tx> Data<'b, 'tx> {
     }
 }
 
-impl<'b, 'tx> Into<Data<'b, 'tx>> for Leaf<'tx> {
-    fn into(self) -> Data<'b, 'tx> {
-        match self {
+impl<'b, 'tx> From<Leaf<'tx>> for Data<'b, 'tx> {
+    fn from(val: Leaf<'tx>) -> Self {
+        match val {
             Leaf::Bucket(name, _) => Data::Bucket(BucketName::new(name)),
             Leaf::Kv(key, value) => Data::KeyValue(KVPair::new(key, value)),
         }
@@ -185,17 +185,17 @@ impl<'b, 'tx> KVPair<'b, 'tx> {
     }
 }
 
-impl<'b, 'tx> Into<KVPair<'b, 'tx>> for (Bytes<'tx>, Bytes<'tx>) {
-    fn into(self) -> KVPair<'b, 'tx> {
-        KVPair::new(self.0, self.1)
+impl<'b, 'tx> From<(Bytes<'tx>, Bytes<'tx>)> for KVPair<'b, 'tx> {
+    fn from(val: (Bytes<'tx>, Bytes<'tx>)) -> Self {
+        KVPair::new(val.0, val.1)
     }
 }
 
-impl<'b, 'tx> Into<Option<KVPair<'b, 'tx>>> for Leaf<'tx> {
-    fn into(self) -> Option<KVPair<'b, 'tx>> {
-        match self {
-            Self::Bucket(_, _) => None,
-            Self::Kv(key, value) => Some(KVPair::new(key, value)),
+impl<'b, 'tx> From<Leaf<'tx>> for Option<KVPair<'b, 'tx>> {
+    fn from(val: Leaf<'tx>) -> Self {
+        match val {
+            Leaf::Bucket(_, _) => None,
+            Leaf::Kv(key, value) => Some(KVPair::new(key, value)),
         }
     }
 }

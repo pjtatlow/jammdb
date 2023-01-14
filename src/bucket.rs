@@ -800,7 +800,7 @@ impl<'b> InnerBucket<'b> {
     fn merge_nodes(&mut self, tx_freelist: &mut TxFreelist) {
         // If we haven't initialized any nodes yet, make sure we have the root node.
         // If there is even one node, we are guarunteed to hage loaded the root node too.
-        if self.page_node_ids.len() == 0 {
+        if self.page_node_ids.is_empty() {
             self.node(PageNodeID::Page(self.meta.root_page), None);
         }
         let mut stack: Vec<(bool, u64)> = vec![(false, self.page_node_ids[&self.meta.root_page])];
@@ -877,7 +877,7 @@ impl<'b> InnerBucket<'b> {
                             let mut sibling = sibling.borrow_mut();
                             // Copy this node's data over to it's sibling
                             sibling.data.merge(&mut node.data);
-                            if node.children.len() > 0 {
+                            if !node.children.is_empty() {
                                 // Move all children nodes over to that sibling too
                                 for child in node.children.iter() {
                                     let c = &mut self.nodes[*child as usize];

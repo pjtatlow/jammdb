@@ -296,7 +296,7 @@ impl<'tx> TxInner<'tx> {
             self.meta.num_pages = freelist.meta.num_pages;
 
             // Grow the file, if needed
-            let required_size = (self.meta.num_pages * self.db.inner.pagesize) as u64;
+            let required_size = self.meta.num_pages * self.db.inner.pagesize;
             let current_size = file.metadata()?.len();
             if current_size < required_size {
                 let size_diff = required_size - current_size;
@@ -311,7 +311,7 @@ impl<'tx> TxInner<'tx> {
                 // the random seeks.
                 for (page_id, (ptr, size)) in freelist.pages.iter() {
                     let buf = unsafe { std::slice::from_raw_parts(ptr.as_ptr(), *size) };
-                    file.seek(SeekFrom::Start((self.db.inner.pagesize * page_id) as u64))?;
+                    file.seek(SeekFrom::Start(self.db.inner.pagesize * page_id))?;
                     file.write_all(buf)?;
                 }
             }
@@ -340,9 +340,7 @@ impl<'tx> TxInner<'tx> {
                 m.tx_id = self.meta.tx_id;
                 m.hash = m.hash_self();
 
-                file.seek(SeekFrom::Start(
-                    (self.db.inner.pagesize * meta_page_id) as u64,
-                ))?;
+                file.seek(SeekFrom::Start(self.db.inner.pagesize * meta_page_id))?;
                 file.write_all(buf.as_slice())?;
             }
 

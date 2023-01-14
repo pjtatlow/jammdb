@@ -77,9 +77,7 @@ impl<'a> PageNode<'a> {
             Ok(i) => (i, true),
             // we didn't find the element, so point at the element just "before" the missing element
             Err(mut i) => {
-                if i > 0 {
-                    i -= 1;
-                };
+                i = i.saturating_sub(1);
                 (i, false)
             }
         }
