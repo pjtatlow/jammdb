@@ -63,11 +63,12 @@ impl<'b, 'tx> From<Leaf<'tx>> for Data<'b, 'tx> {
     }
 }
 
-/// Nested bucket placeholder
+/// Bucket name
 ///
-/// This data type signifies that a given key is associated with a nested bucket.alloc
+/// This data type signifies that a given key is associated with a nested bucket.
 /// You can access the key using the `name` function.
-/// The BucketData itself can be used to retreive the bucket using the `get_bucket` function.
+/// The BucketData itself can be used to retreive the bucket using the `get_bucket`
+/// function without copying the bytes for the key.
 ///
 /// # Examples
 ///

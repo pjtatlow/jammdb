@@ -50,7 +50,7 @@ fn main() -> Result<(), Error> {
     let db = DB::open("my-database.db")?;
 
     // open a writable transaction so we can make changes
-    let mut tx = db.tx(true)?;
+    let tx = db.tx(true)?;
 
     // create a bucket to store a map of first names to last names
     let names_bucket = tx.create_bucket("names")?;
@@ -64,7 +64,7 @@ fn main() -> Result<(), Error> {
     // open the existing database file
     let db = DB::open("my-database.db")?;
     // open a read-only transaction to get the data
-    let mut tx = db.tx(true)?;
+    let tx = db.tx(true)?;
     // get the bucket we created in the last transaction
     let names_bucket = tx.get_bucket("names")?;
     // get the key/ value pair we inserted into the bucket
@@ -81,8 +81,6 @@ fn main() -> Result<(), Error> {
 ```rust
 use jammdb::{DB, Data, Error};
 use serde::{Deserialize, Serialize};
-// use rmps crate to serialize structs using the MessagePack format
-use rmp_serde::{Deserializer, Serializer};
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct User {
@@ -98,7 +96,7 @@ fn main() -> Result<(), Error> {
 {
     // open a new database file and start a writable transaction
     let db = DB::open("my-database.db")?;
-    let mut tx = db.tx(true)?;
+    let tx = db.tx(true)?;
 
     // create a bucket to store users
     let users_bucket = tx.create_bucket("users")?;
@@ -114,7 +112,7 @@ fn main() -> Result<(), Error> {
     // open the existing database file
     let db = DB::open("my-database.db")?;
     // open a read-only transaction to get the data
-    let mut tx = db.tx(true)?;
+    let tx = db.tx(true)?;
     // get the bucket we created in the last transaction
     let users_bucket = tx.get_bucket("users")?;
     // get the key / value pair we inserted into the bucket

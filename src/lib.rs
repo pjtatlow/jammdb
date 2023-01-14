@@ -109,11 +109,6 @@
 //! }
 //!     Ok(())
 //! }
-//! ```
-//! This should fail
-//! ```compile_fail
-//! let a: u64 = 0_i32;
-//! ```
 //!
 
 #[allow(clippy::mutable_key_type)]
@@ -133,7 +128,7 @@ mod tx;
 
 pub use crate::bytes::ToBytes;
 pub use bucket::Bucket;
-pub use cursor::Cursor;
+pub use cursor::{Buckets, Cursor, KVPairs};
 pub use data::*;
 pub use db::{OpenOptions, DB};
 pub use errors::*;
