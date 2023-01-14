@@ -1,24 +1,49 @@
 use std::io::Write;
 use std::mem::size_of;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
+use std::sync::Arc;
 
-use crate::data::{BucketData, SliceParts};
+use memmap2::Mmap;
+
 use crate::errors::Result;
 use crate::meta::Meta;
 use crate::node::{Node, NodeData, NodeType};
-use crate::transaction::TransactionInner;
 
 pub(crate) type PageID = u64;
 
 pub(crate) type PageType = u8;
 
+#[derive(Clone)]
+pub(crate) struct Pages {
+    pub(crate) data: Arc<Mmap>,
+    pub(crate) pagesize: u64,
+}
+
+impl Pages {
+    pub fn new(data: Arc<Mmap>, pagesize: u64) -> Pages {
+        Pages { data, pagesize }
+    }
+
+    #[inline]
+    pub fn page<'a>(&self, id: PageID) -> &'a Page {
+        #[allow(clippy::cast_ptr_alignment)]
+        unsafe {
+            &*(&self.data[(id * self.pagesize) as usize] as *const u8 as *const Page)
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub(crate) struct Page {
+    // id * pagesize is the offset from the beginning of the file
     pub(crate) id: PageID,
     pub(crate) page_type: PageType,
+    // Number of elements on this page, the type of element depends on the pageType
     pub(crate) count: u64,
+    // Number of additional pages after this one that are part of this block
     pub(crate) overflow: u64,
+    // ptr serves as a reference to where the actual data starts
     pub(crate) ptr: u64,
 }
 
@@ -102,9 +127,9 @@ impl Page {
     }
 
     pub(crate) fn write_node(&mut self, n: &Node, num_pages: u64) -> Result<()> {
-        self.id = n.page_id;
+        debug_assert!(self.id == n.page_id);
+        debug_assert!(self.overflow == num_pages - 1);
         self.count = n.data.len() as u64;
-        self.overflow = num_pages - 1;
         let header_size;
         let mut data_size: u64 = 0;
         let mut data: Vec<&[u8]>;
@@ -116,9 +141,9 @@ impl Page {
                 data = Vec::with_capacity(self.count as usize);
                 let elems = self.branch_elements_mut();
                 for (b, elem) in branches.iter().zip(elems.iter_mut()) {
-                    debug_assert!(b.page != 0, "PAGE SHOULD NOT BE ZERO!");
+                    debug_assert!(b.page > 1, "Branch should not point to page {}", b.page);
                     elem.page = b.page;
-                    elem.key_size = b.key_size();
+                    elem.key_size = b.key_size() as u64;
                     elem.pos = header_offsets + data_size;
                     data_size += elem.key_size;
                     header_offsets -= header_size;
@@ -156,96 +181,6 @@ impl Page {
         }
         Ok(())
     }
-
-    #[cfg_attr(tarpaulin, skip)]
-    pub fn print(&self, tx: &TransactionInner) {
-        let name = self.name();
-        println!("{} [style=\"filled\", fillcolor=\"darkorchid1\"];", name);
-        match self.page_type {
-            Page::TYPE_BRANCH => {
-                for (i, elem) in self.branch_elements().iter().enumerate() {
-                    let key = elem.key();
-                    let elem_name =
-                        format!("\"Index: {}\\nPage: {}\\nKey: {:?}\"", i, self.id, key);
-                    let page = tx.page(elem.page);
-                    println!("{} [style=\"filled\", fillcolor=\"burlywood\"];", elem_name);
-                    println!("{} -> {}", name, elem_name);
-                    println!("{} -> {}", elem_name, page.name());
-                    page.print(tx);
-                }
-            }
-            Page::TYPE_LEAF => {
-                for (i, elem) in self.leaf_elements().iter().enumerate() {
-                    match elem.node_type {
-                        Node::TYPE_BUCKET => {
-                            // let parts = SliceParts::from_slice(elem.value());
-                            let bd = BucketData::from_slice_parts(
-                                SliceParts::from_slice(elem.key()),
-                                SliceParts::from_slice(elem.value()),
-                            );
-                            let meta = bd.meta();
-                            let elem_name = format!(
-                                "\"Index: {}\\nPage: {}\\nKey {:?}\\n {:?}\"",
-                                i,
-                                self.id,
-                                elem.key(),
-                                meta
-                            );
-                            println!("{} [style=\"filled\", fillcolor=\"gray91\"];", elem_name);
-                            println!("{} -> {}", name, elem_name);
-                            let page = tx.page(meta.root_page);
-                            println!("{} -> {}", elem_name, page.name());
-                            page.print(tx);
-                        }
-                        Node::TYPE_DATA => {
-                            // return;
-                            let elem_name = format!(
-                                "\"Index: {}\\nPage: {}\\nKey: {:?}\\nValue '{}'\"",
-                                i,
-                                self.id,
-                                elem.key(),
-                                std::str::from_utf8(elem.value()).unwrap()
-                            );
-                            // let elem_name = format!("\"Index: {}\\nPage: {}\\nKey: '{}'\\nValue '{}'\"", i, self.id, std::str::from_utf8(elem.key()).unwrap(), std::str::from_utf8(elem.value()).unwrap());
-                            println!(
-                                "{} [style=\"filled\", fillcolor=\"chartreuse\"];",
-                                elem_name
-                            );
-                            println!("{} -> {}", name, elem_name);
-                        }
-                        _ => panic!("LOL NOPE"),
-                    }
-                }
-            }
-            _ => panic!(
-                "CANNOT WRITE NODE OF TYPE {} from page {}",
-                type_str(self.page_type),
-                self.id
-            ),
-        }
-    }
-
-    #[cfg_attr(tarpaulin, skip)]
-    pub fn name(&self) -> String {
-        let size = 4096 + (self.overflow * 4096);
-        format!(
-            "\"Page #{} ({}) ({} bytes)\"",
-            self.id,
-            type_str(self.page_type),
-            size
-        )
-    }
-}
-
-#[cfg_attr(tarpaulin, skip)]
-fn type_str(pt: PageType) -> String {
-    match pt {
-        Page::TYPE_BRANCH => String::from("Branch"),
-        Page::TYPE_FREELIST => String::from("FreeList"),
-        Page::TYPE_LEAF => String::from("Leaf"),
-        Page::TYPE_META => String::from("Meta"),
-        _ => format!("Invalid ({:#X})", pt),
-    }
 }
 
 #[repr(C)]
@@ -256,7 +191,7 @@ pub(crate) struct BranchElement {
 }
 
 impl BranchElement {
-    pub(crate) fn key(&self) -> &[u8] {
+    pub(crate) fn key<'a>(&self) -> &'a [u8] {
         let pos = self.pos as usize;
         unsafe {
             let start = self as *const BranchElement as *const u8;
@@ -275,7 +210,7 @@ pub(crate) struct LeafElement {
 }
 
 impl LeafElement {
-    pub(crate) fn key(&self) -> &[u8] {
+    pub(crate) fn key<'a>(&self) -> &'a [u8] {
         let pos = self.pos as usize;
         unsafe {
             let start = self as *const LeafElement as *const u8;
@@ -283,7 +218,7 @@ impl LeafElement {
             &buf[pos..]
         }
     }
-    pub(crate) fn value(&self) -> &[u8] {
+    pub(crate) fn value<'a>(&self) -> &'a [u8] {
         let pos = (self.pos + self.key_size) as usize;
         unsafe {
             let start = self as *const LeafElement as *const u8;

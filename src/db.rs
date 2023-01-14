@@ -1,18 +1,15 @@
-use std::fs::{File, OpenOptions as FileOpenOptions};
-use std::io::Write;
-use std::path::Path;
-use std::sync::{Arc, Mutex};
+use memmap2::Mmap;
+use page_size::get as get_page_size;
+use std::{
+    fs::{File, OpenOptions as FileOpenOptions},
+    io::Write,
+    path::Path,
+    sync::{Arc, Mutex, RwLock},
+};
 
+use crate::{bucket::BucketMeta, errors::Result, page::Page, tx::Tx};
+use crate::{freelist::Freelist, meta::Meta};
 use fs2::FileExt;
-use memmap::Mmap;
-use page_size::get as getPageSize;
-
-use crate::bucket::BucketMeta;
-use crate::errors::Result;
-use crate::freelist::Freelist;
-use crate::meta::Meta;
-use crate::page::Page;
-use crate::transaction::Transaction;
 
 const MAGIC_VALUE: u32 = 0x00AB_CDEF;
 const VERSION: u32 = 1;
@@ -47,19 +44,7 @@ const DEFAULT_NUM_PAGES: usize = 32;
 pub struct OpenOptions {
     pagesize: u64,
     num_pages: usize,
-}
-
-impl Default for OpenOptions {
-    fn default() -> Self {
-        let pagesize = getPageSize() as u64;
-        if pagesize < 1024 {
-            panic!("Pagesize must be 1024 bytes minimum");
-        }
-        OpenOptions {
-            pagesize,
-            num_pages: DEFAULT_NUM_PAGES,
-        }
-    }
+    strict_mode: bool,
 }
 
 impl OpenOptions {
@@ -99,6 +84,15 @@ impl OpenOptions {
         self
     }
 
+    /// Enables or disabled "Strict Mode", where each transaction will check the database for errors before finalizing a write.
+    ///
+    /// The default is `false`, but you may enable this if you want an extra degree of safety for your data at the cost of
+    /// slower writes.
+    pub fn strict_mode(mut self, strict_mode: bool) -> Self {
+        self.strict_mode = strict_mode;
+        self
+    }
+
     /// Opens the database with the current options.
     ///
     /// If the file does not exist, it will initialize an empty database with a size of (`num_pages * pagesize`) bytes.
@@ -122,19 +116,38 @@ impl OpenOptions {
             FileOpenOptions::new().read(true).write(true).open(path)?
         };
 
-        let db = DBInner::open(file, self.pagesize)?;
-        Ok(DB(Arc::new(db)))
+        let db = DBInner::open(file, self.pagesize, self.strict_mode)?;
+        Ok(DB {
+            inner: Arc::new(db),
+        })
+    }
+}
+
+impl Default for OpenOptions {
+    fn default() -> Self {
+        let pagesize = get_page_size() as u64;
+        if pagesize < 1024 {
+            panic!("Pagesize must be 1024 bytes minimum");
+        }
+        OpenOptions {
+            pagesize,
+            num_pages: DEFAULT_NUM_PAGES,
+            strict_mode: false,
+        }
     }
 }
 
 /// A database
 ///
 /// A DB can created from an [`OpenOptions`] builder, or by calling [`open`](#method.open).
-/// From a DB, you can create a [`Transaction`] to access the data in the database.
-/// Opening a transaction requires a mutable borrow though, so you need to `clone` the database
+/// From a DB, you can create a [`Tx`] to access the data in the database.
+/// If you want to use the database across threads, so you can `clone` the database
 /// to have concurrent transactions (you're really just cloning an [`Arc`] so it's pretty cheap).
+/// **Do not** try to open multiple transactions in the same thread, you're pretty likely to cause a deadlock.
 #[derive(Clone)]
-pub struct DB(Arc<DBInner>);
+pub struct DB {
+    pub(crate) inner: Arc<DBInner>,
+}
 
 impl DB {
     /// Opens a database using the default [`OpenOptions`].
@@ -159,83 +172,96 @@ impl DB {
         OpenOptions::new().open(path)
     }
 
-    /// Creates a [`Transaction`].
+    /// Creates a [`Tx`].
     /// This transaction is either read-only or writable depending on the `writable` parameter.
-    /// Please read the docs on a [`Transaction`] for more details.
-    pub fn tx(&self, writable: bool) -> Result<Transaction> {
-        Transaction::new(&self.0, writable)
+    /// Please read the docs on a [`Tx`] for more details.
+    pub fn tx(&self, writable: bool) -> Result<Tx> {
+        Tx::new(self, writable)
     }
 
     /// Returns the database's pagesize.
     pub fn pagesize(&self) -> u64 {
-        self.0.pagesize
+        self.inner.pagesize
     }
 
     #[doc(hidden)]
     pub fn check(&self) -> Result<()> {
-        let tx = self.tx(false)?;
-        tx.check()
+        self.tx(false)?.check()
     }
 }
-
 pub(crate) struct DBInner {
-    pub(crate) data: Arc<Mmap>,
-    pub(crate) freelist: Freelist,
-
+    pub(crate) data: Mutex<Arc<Mmap>>,
+    pub(crate) mmap_lock: RwLock<()>,
+    pub(crate) freelist: Mutex<Freelist>,
     pub(crate) file: Mutex<File>,
-    pub(crate) mmap_lock: Mutex<()>,
     pub(crate) open_ro_txs: Mutex<Vec<u64>>,
+    pub(crate) strict_mode: bool,
 
     pub(crate) pagesize: u64,
 }
 
 impl DBInner {
-    pub(crate) fn open(file: File, pagesize: u64) -> Result<DBInner> {
+    pub(crate) fn open(file: File, pagesize: u64, strict_mode: bool) -> Result<DBInner> {
         file.lock_exclusive()?;
-
-        let mmap = unsafe { Arc::new(Mmap::map(&file)?) };
-
-        let mut db = DBInner {
+        let mmap = mmap(&file)?;
+        let mmap = Mutex::new(Arc::new(mmap));
+        let db = DBInner {
             data: mmap,
-            freelist: Freelist::new(),
+            mmap_lock: RwLock::new(()),
+            freelist: Mutex::new(Freelist::new()),
 
             file: Mutex::new(file),
-            mmap_lock: Mutex::new(()),
             open_ro_txs: Mutex::new(Vec::new()),
 
             pagesize,
+            strict_mode,
         };
 
-        let meta = db.meta();
-        let free_pages = Page::from_buf(&db.data, meta.freelist_page, pagesize).freelist();
+        {
+            let meta = db.meta()?;
+            let data = db.data.lock()?;
+            let free_pages = Page::from_buf(&data, meta.freelist_page, pagesize).freelist();
 
-        if !free_pages.is_empty() {
-            db.freelist.init(free_pages);
+            if !free_pages.is_empty() {
+                db.freelist.lock()?.init(free_pages);
+            }
         }
 
         Ok(db)
     }
 
-    pub(crate) fn resize(&mut self, file: &File, new_size: u64) -> Result<()> {
+    pub(crate) fn resize(&self, file: &File, new_size: u64) -> Result<Arc<Mmap>> {
         file.allocate(new_size)?;
-        let _lock = self.mmap_lock.lock()?;
-        let mmap = unsafe { Mmap::map(file).unwrap() };
-        self.data = Arc::new(mmap);
-        Ok(())
+        let _lock = self.mmap_lock.write()?;
+        let mut data = self.data.lock()?;
+        let mmap = mmap(file)?;
+        *data = Arc::new(mmap);
+        Ok(data.clone())
     }
 
-    pub(crate) fn meta(&self) -> Meta {
-        let meta1 = Page::from_buf(&self.data, 0, self.pagesize).meta();
-        let meta2 = Page::from_buf(&self.data, 1, self.pagesize).meta();
-        match (meta1.valid(), meta2.valid()) {
+    pub(crate) fn meta(&self) -> Result<Meta> {
+        let data = self.data.lock()?;
+        let meta1 = Page::from_buf(&data, 0, self.pagesize).meta();
+
+        // Double check that we have the right pagesize before we read the second page.
+        if meta1.valid() && meta1.pagesize != self.pagesize {
+            assert_eq!(
+                meta1.pagesize, self.pagesize,
+                "Invalid pagesize from meta1 {}. Expected {}.",
+                meta1.pagesize, self.pagesize
+            );
+        }
+
+        let meta2 = Page::from_buf(&data, 1, self.pagesize).meta();
+        let meta = match (meta1.valid(), meta2.valid()) {
             (true, true) => {
                 assert_eq!(
-                    meta1.pagesize as u64, self.pagesize,
+                    meta1.pagesize, self.pagesize,
                     "Invalid pagesize from meta1 {}. Expected {}.",
                     meta1.pagesize, self.pagesize
                 );
                 assert_eq!(
-                    meta2.pagesize as u64, self.pagesize,
+                    meta2.pagesize, self.pagesize,
                     "Invalid pagesize from meta2 {}. Expected {}.",
                     meta2.pagesize, self.pagesize
                 );
@@ -247,7 +273,7 @@ impl DBInner {
             }
             (true, false) => {
                 assert_eq!(
-                    meta1.pagesize as u64, self.pagesize,
+                    meta1.pagesize, self.pagesize,
                     "Invalid pagesize from meta1 {}. Expected {}.",
                     meta1.pagesize, self.pagesize
                 );
@@ -255,15 +281,16 @@ impl DBInner {
             }
             (false, true) => {
                 assert_eq!(
-                    meta2.pagesize as u64, self.pagesize,
+                    meta2.pagesize, self.pagesize,
                     "Invalid pagesize from meta2 {}. Expected {}.",
                     meta2.pagesize, self.pagesize
                 );
                 meta2
             }
             (false, false) => panic!("NO VALID META PAGES"),
-        }
-        .clone()
+        };
+
+        Ok(meta.clone())
     }
 }
 
@@ -286,10 +313,10 @@ fn init_file(path: &Path, pagesize: u64, num_pages: usize) -> Result<File> {
         page.id = i;
         page.page_type = Page::TYPE_META;
         let m = page.meta_mut();
-        m.meta_page = i as u8;
+        m.meta_page = i as u32;
         m.magic = MAGIC_VALUE;
         m.version = VERSION;
-        m.pagesize = pagesize as u32;
+        m.pagesize = pagesize;
         m.freelist_page = 2;
         m.root = BucketMeta {
             root_page: 3,
@@ -322,7 +349,7 @@ mod tests {
 
     #[test]
     fn test_open_options() {
-        assert_ne!(getPageSize(), 5000);
+        assert_ne!(get_page_size(), 5000);
         let random_file = RandomFile::new();
         {
             let db = OpenOptions::new()
@@ -362,7 +389,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_different_pagesizes() {
-        assert_ne!(getPageSize(), 5000);
+        assert_ne!(get_page_size(), 5000);
         let random_file = RandomFile::new();
         {
             let db = OpenOptions::new()
@@ -374,4 +401,20 @@ mod tests {
         }
         DB::open(&random_file).unwrap();
     }
+}
+
+// Have different mmap functions for Unix and Windows
+#[cfg(unix)]
+fn mmap(file: &File) -> Result<Mmap> {
+    let mmap = unsafe { Mmap::map(file)? };
+    // On Unix we advice the OS that page access will be random.
+    mmap.advise(memmap2::Advice::Random)?;
+    Ok(mmap)
+}
+
+// On Windows there is no advice to give.
+#[cfg(windows)]
+fn mmap(file: &File) -> Result<Mmap> {
+    let mmap = unsafe { Mmap::map(file)? };
+    Ok(mmap)
 }

@@ -25,6 +25,35 @@ jobs:
           cargo fmt --check
           cargo clippy $CLIPPY_OPTS
 
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable-x86_64-unknown-linux-gnu
+          components: llvm-tools-preview
+
+      - name: Download grcov
+        run: |
+          mkdir -p "${HOME}/.local/bin"
+          curl -sL https://github.com/mozilla/grcov/releases/download/v0.8.13/grcov-x86_64-unknown-linux-gnu.tar.bz2 | tar jxf - -C "${HOME}/.local/bin"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Calculate coverage
+        run: |
+          mkdir -p target/coverage
+          CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test
+          grcov . --binary-path ./target/debug/deps/ -s . -t lcov --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/tests.lcov
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v3
+        with:
+          files: target/coverage/*.lcov
+
   test-windows:
     runs-on: windows-latest
     strategy:
@@ -90,43 +119,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@1.53.0
+        uses: dtolnay/rust-toolchain@1.56.0
 
       - name: Run tests
         run: cargo test --verbose
-# on:
-#   push:
-#     branches: [master]
-#   pull_request:
-#     branches: [master]
-
-# jobs:
-#   build:
-#     runs-on: ubuntu-latest
-
-#     steps:
-#       - name: Checkout repository
-#         uses: actions/checkout@v2
-
-#       - name: Install stable toolchain
-#         uses: actions-rs/toolchain@v1
-#         with:
-#           toolchain: stable
-#           override: true
-
-#       - name: Run tests
-#         run: cargo test --verbose
-# - name: Run cargo-tarpaulin
-#   uses: actions-rs/tarpaulin@v0.1
-#   with:
-#     version: "0.15.0"
-#     args: "-- --test-threads 1"
-# - name: Upload to codecov.io
-#   uses: codecov/codecov-action@v1.0.2
-#   with:
-#     token: ${{ secrets.CODECOV_IO_TOKEN }}
-# - name: Archive code coverage results
-#   uses: actions/upload-artifact@v1
-#   with:
-#     name: code-coverage-report
-#     path: cobertura.xml

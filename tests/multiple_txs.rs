@@ -1,11 +1,11 @@
-use jammdb::{Bucket, Data, Error, DB};
+use jammdb::{Bucket, Data, Error, OpenOptions};
 
 mod common;
 
 #[test]
 fn tx_isolation() -> Result<(), Error> {
     let random_file = common::RandomFile::new();
-    let db = DB::open(&random_file.path)?;
+    let db = OpenOptions::new().strict_mode(true).open(&random_file)?;
     {
         let ro_tx = db.tx(false)?;
         let wr_tx = db.tx(true)?;
@@ -63,7 +63,7 @@ fn check_data(b: &Bucket, len: u64, repeats: usize) {
     for (i, data) in b.cursor().into_iter().enumerate() {
         let i = i as u64;
         count += 1;
-        match &*data {
+        match data {
             Data::KeyValue(kv) => {
                 assert_eq!(kv.key(), i.to_be_bytes());
                 assert_eq!(kv.value(), i.to_string().repeat(repeats).as_bytes());

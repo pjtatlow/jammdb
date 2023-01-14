@@ -1,4 +1,4 @@
-use jammdb::{Bucket, Data, Error, DB};
+use jammdb::{Bucket, Data, Error, OpenOptions, DB};
 use rand::prelude::*;
 
 mod common;
@@ -119,7 +119,9 @@ fn cursor_seek() -> Result<(), Error> {
 
     let random_file = common::RandomFile::new();
     {
-        let db = DB::open(&random_file.path)?;
+        let db = OpenOptions::new()
+            .strict_mode(true)
+            .open(&random_file.path)?;
         {
             let tx = db.tx(true)?;
             let b = tx.create_bucket("abc")?;
@@ -130,7 +132,7 @@ fn cursor_seek() -> Result<(), Error> {
                 // randomly insert the fruits into the bucket
                 for fruit in random_fruits.iter() {
                     let index = fruits.binary_search(fruit).unwrap();
-                    b.put(fruit, index.to_string())?;
+                    b.put(*fruit, index.to_string())?;
                 }
             }
             check_cursor_starts(&fruits, &b);
@@ -143,7 +145,9 @@ fn cursor_seek() -> Result<(), Error> {
         }
     }
     {
-        let db = DB::open(&random_file.path)?;
+        let db = OpenOptions::new()
+            .strict_mode(true)
+            .open(&random_file.path)?;
         {
             let tx = db.tx(false)?;
             let b = tx.get_bucket("abc")?;
@@ -152,7 +156,6 @@ fn cursor_seek() -> Result<(), Error> {
         {
             let tx = db.tx(false)?;
             let b = tx.get_bucket("abc")?;
-            println!("7 {} {:?}", fruits[7], &fruits[7..]);
             check_cursor("bl", &fruits[6..], &b, 6);
         }
         {
@@ -165,9 +168,8 @@ fn cursor_seek() -> Result<(), Error> {
         }
         {
             let tx = db.tx(false)?;
-            let mut b = tx.get_bucket("abc")?;
-            println!("7 {} {:?}", fruits[7], &fruits[7..]);
-            check_cursor("bl", &fruits[6..], &mut b, 6);
+            let b = tx.get_bucket("abc")?;
+            check_cursor("bl", &fruits[6..], &b, 6);
         }
     }
     let db = DB::open(&random_file.path)?;
@@ -198,8 +200,7 @@ fn check_cursor(seek_to: &str, expected_fruits: &[&str], b: &Bucket, start_index
     for data in cursor {
         assert!(cur_index < expected_fruits.len());
         let expected_fruit = expected_fruits[cur_index];
-        if let Data::KeyValue(kv) = &*data {
-            println!("KEY {}", std::str::from_utf8(kv.key()).unwrap());
+        if let Data::KeyValue(kv) = data {
             assert_eq!(expected_fruit.as_bytes(), kv.key());
             let value_string = (cur_index + start_index).to_string();
             assert_eq!(value_string.as_bytes(), kv.value());
@@ -215,7 +216,7 @@ fn check_cursor(seek_to: &str, expected_fruits: &[&str], b: &Bucket, start_index
 fn root_buckets() -> Result<(), Error> {
     let random_file = common::RandomFile::new();
     {
-        let db = DB::open(&random_file.path)?;
+        let db = OpenOptions::new().strict_mode(true).open(&random_file)?;
         {
             let tx = db.tx(true)?;
             {
@@ -259,13 +260,13 @@ fn kv_iter() -> Result<(), Error> {
     let random_file = common::RandomFile::new();
     let data = vec![("abc", "one"), ("def", "two"), ("ghi", "three")];
     {
-        let db = DB::open(&random_file.path)?;
+        let db = OpenOptions::new().strict_mode(true).open(&random_file)?;
         {
             let tx = db.tx(true)?;
             {
                 let b = tx.create_bucket("data")?;
                 for (k, v) in data.iter() {
-                    b.put(k, v)?;
+                    b.put(*k, *v)?;
                 }
             }
             tx.commit()?;

@@ -1,19 +1,21 @@
-use std::mem::size_of;
+use std::io::Write;
+// use std::mem::size_of;
 
+use bytes::BufMut;
 use sha3::{Digest, Sha3_256};
 
 use crate::bucket::BucketMeta;
 use crate::page::PageID;
 
-const META_SIZE: usize = size_of::<Meta>();
+// const META_SIZE: usize = size_of::<Meta>();
 
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub(crate) struct Meta {
-    pub(crate) meta_page: u8,
+    pub(crate) meta_page: u32,
     pub(crate) magic: u32,
     pub(crate) version: u32,
-    pub(crate) pagesize: u32,
+    pub(crate) pagesize: u64,
     pub(crate) root: BucketMeta,
     pub(crate) num_pages: PageID,
     pub(crate) freelist_page: PageID,
@@ -31,13 +33,25 @@ impl Meta {
         let mut hasher = Sha3_256::new();
         hasher.update(self.bytes());
         let hash = hasher.finalize();
+        assert_eq!(hash.len(), 32);
         hash_result.copy_from_slice(&hash[..]);
         hash_result
     }
 
-    fn bytes(&self) -> &[u8] {
-        let ptr = self as *const Meta as *const u8;
-        unsafe { std::slice::from_raw_parts(ptr, META_SIZE - 32) }
+    fn bytes(&self) -> bytes::Bytes {
+        let buf = bytes::BytesMut::new();
+        let mut w = buf.writer();
+        let _ = w.write(&self.meta_page.to_be_bytes());
+        let _ = w.write(&self.magic.to_be_bytes());
+        let _ = w.write(&self.version.to_be_bytes());
+        let _ = w.write(&self.pagesize.to_be_bytes());
+        let _ = w.write(&self.root.root_page.to_be_bytes());
+        let _ = w.write(&self.root.next_int.to_be_bytes());
+        let _ = w.write(&self.num_pages.to_be_bytes());
+        let _ = w.write(&self.freelist_page.to_be_bytes());
+        let _ = w.write(&self.tx_id.to_be_bytes());
+
+        w.into_inner().freeze()
     }
 }
 

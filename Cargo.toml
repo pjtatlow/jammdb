@@ -1,9 +1,9 @@
 [package]
 name = "jammdb"
 description = "An embedded single-file database for Rust"
-version = "0.6.0"
+version = "0.8.0"
 authors = ["PJ Tatlow <pjtatlow@gmail.com>"]
-edition = "2018"
+edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/pjtatlow/jammdb"
 readme = "README.md"
@@ -19,15 +19,18 @@ exclude = [
 ]
 
 [dependencies]
-memmap = "0.7.0"
+memmap2 = "0.5"
 page_size = "0.5"
-fs2 = "0.4.3"
+fs2 = "0.4"
 sha3 = "0.10"
+bytes = { version = "1", features = ["serde"] }
+bumpalo = "3"
 
 [dev-dependencies]
 rand = "0.8"
 rmp-serde = "1.1"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1"
 
 [badges]
 codecov = { repository = "pjtatlow/jammdb" }

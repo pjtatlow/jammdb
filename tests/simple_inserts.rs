@@ -1,7 +1,13 @@
-use jammdb::{Bucket, Data, Error, DB};
+use jammdb::{Bucket, Data, Error, OpenOptions, DB};
 use rand::prelude::*;
 
 mod common;
+
+#[test]
+fn super_simple() -> Result<(), Error> {
+    test_insert((0..=1).collect())?;
+    Ok(())
+}
 
 #[test]
 fn small_insert() -> Result<(), Error> {
@@ -31,7 +37,9 @@ fn test_insert(mut values: Vec<u64>) -> Result<(), Error> {
     let random_file = common::RandomFile::new();
     let mut rng = rand::thread_rng();
     {
-        let db = DB::open(&random_file.path)?;
+        let db = OpenOptions::new()
+            .strict_mode(true)
+            .open(&random_file.path)?;
         {
             let tx = db.tx(true)?;
             let b = tx.create_bucket("abc")?;
@@ -73,7 +81,7 @@ fn check_data(b: &Bucket, len: u64, repeats: usize) {
     for (i, data) in b.cursor().into_iter().enumerate() {
         let i = i as u64;
         count += 1;
-        match &*data {
+        match data {
             Data::KeyValue(kv) => {
                 assert_eq!(kv.key(), i.to_be_bytes());
                 assert_eq!(kv.value(), i.to_string().repeat(repeats).as_bytes());

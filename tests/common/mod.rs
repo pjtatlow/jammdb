@@ -1,3 +1,8 @@
+#[allow(dead_code)]
+#[allow(clippy::mutable_key_type)]
+pub mod record;
+use std::path::Path;
+
 use rand::{distributions::Alphanumeric, Rng};
 
 pub struct RandomFile {
@@ -21,6 +26,12 @@ impl RandomFile {
                 return RandomFile { path };
             }
         }
+    }
+}
+
+impl AsRef<Path> for RandomFile {
+    fn as_ref(&self) -> &Path {
+        self.path.as_path()
     }
 }
 
