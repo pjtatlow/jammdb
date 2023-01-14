@@ -8,21 +8,68 @@ pub trait ToBytes<'a> {
     fn to_bytes(self) -> Bytes<'a>;
 }
 
-impl<'a, T: Into<Bytes<'a>>> ToBytes<'a> for T {
+impl<'a> ToBytes<'a> for &'a [u8] {
     fn to_bytes(self) -> Bytes<'a> {
-        self.into()
+        Bytes::Slice(self)
     }
 }
 
-impl<'a> ToBytes<'a> for &[u8] {
+impl<'a> ToBytes<'a> for &'a str {
     fn to_bytes(self) -> Bytes<'a> {
-        Bytes::Bytes(bytes::Bytes::copy_from_slice(self))
+        Bytes::Slice(self.as_bytes())
     }
 }
 
-impl<'a, const N: usize> ToBytes<'a> for [u8; N] {
+macro_rules! byte_array_to_bytes {
+    ($($n:expr),*) => (
+    $(
+        impl<'a> ToBytes<'a> for [u8; $n] {
+            fn to_bytes(self) -> Bytes<'a> {
+                Bytes::Bytes(bytes::Bytes::copy_from_slice(&self))
+            }
+        }
+    )*
+)
+}
+
+// We don't want to automatically copy arrays of any length,
+// but for concenience, we'll copy arrays for integer sizes
+// so that if you do i.to_be_bytes() it will work for any int.
+byte_array_to_bytes!(1, 2, 4, 8, 16);
+
+impl<'a> ToBytes<'a> for String {
     fn to_bytes(self) -> Bytes<'a> {
-        Bytes::Bytes(bytes::Bytes::copy_from_slice(&self))
+        Bytes::String(Rc::new(self))
+    }
+}
+
+impl<'a> ToBytes<'a> for Vec<u8> {
+    fn to_bytes(self) -> Bytes<'a> {
+        Bytes::Vec(Rc::new(self))
+    }
+}
+
+impl<'a> ToBytes<'a> for bytes::Bytes {
+    fn to_bytes(self) -> Bytes<'a> {
+        Bytes::Bytes(self)
+    }
+}
+
+impl<'a> ToBytes<'a> for &bytes::Bytes {
+    fn to_bytes(self) -> Bytes<'a> {
+        Bytes::Bytes(self.clone())
+    }
+}
+
+impl<'a> ToBytes<'a> for Bytes<'a> {
+    fn to_bytes(self) -> Bytes<'a> {
+        self
+    }
+}
+
+impl<'a> ToBytes<'a> for &Bytes<'a> {
+    fn to_bytes(self) -> Bytes<'a> {
+        self.clone()
     }
 }
 
@@ -87,44 +134,25 @@ impl<'a> Hash for Bytes<'a> {
     }
 }
 
-impl<'a> From<&'static str> for Bytes<'a> {
-    fn from(s: &'static str) -> Self {
-        Self::Bytes(bytes::Bytes::from_static(s.as_bytes()))
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_vec() {
+        let vec: Vec<u8> = vec![0, 0, 0];
+        let ptr = vec.as_slice()[0] as *const u8;
+        let b: Bytes = vec.to_bytes();
+        let ptr2 = b.as_ref()[0] as *const u8;
+        assert!(ptr == ptr2);
+    }
+
+    #[test]
+    fn from_str() {
+        let s = "abc";
+        let ptr = s.as_bytes()[0] as *const u8;
+        let b: Bytes = s.to_bytes();
+        let ptr2 = b.as_ref()[0] as *const u8;
+        assert!(ptr == ptr2);
     }
 }
-
-impl<'a> From<String> for Bytes<'a> {
-    fn from(s: String) -> Self {
-        Self::String(Rc::new(s))
-    }
-}
-
-impl<'a> From<Vec<u8>> for Bytes<'a> {
-    fn from(s: Vec<u8>) -> Self {
-        Self::Vec(Rc::new(s))
-    }
-}
-
-impl<'a> From<bytes::Bytes> for Bytes<'a> {
-    fn from(b: bytes::Bytes) -> Self {
-        Self::Bytes(b)
-    }
-}
-
-impl<'a> From<&bytes::Bytes> for Bytes<'a> {
-    fn from(b: &bytes::Bytes) -> Self {
-        Self::Bytes(b.clone())
-    }
-}
-
-// impl<'a> From<bytes::BytesMut> for Bytes<'a> {
-//     fn from(b: bytes::BytesMut) -> Self {
-//         Self::Bytes(b.freeze())
-//     }
-// }
-
-// impl From<&str> for Bytes {
-//     fn from(s: &str) -> Self {
-//         Self::Bytes(Bytes::copy_from_slice(s.as_bytes()))
-//     }
-// }

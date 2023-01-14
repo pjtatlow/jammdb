@@ -163,7 +163,7 @@ fn check_bucket(
                         assert_eq!(b.name(), key.as_ref());
                         assert!(fake_data.is_bucket());
                         let data_bucket = fake_data.unwrap_bucket();
-                        let db_bucket = db_bucket.get_bucket(b.name())?;
+                        let db_bucket = db_bucket.get_bucket(b)?;
                         check_bucket(db_bucket, data_bucket)?;
                     }
                     jammdb::Data::KeyValue(kv) => {

@@ -1,8 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    data::Data,
-    node::{Node, NodeData, NodeID},
+    node::{Leaf, Node, NodeData, NodeID},
     page::{Page, PageID},
 };
 
@@ -86,10 +85,10 @@ impl<'a> PageNode<'a> {
         }
     }
 
-    pub fn val<'b>(&'b self, index: usize) -> Option<Data<'a>> {
+    pub fn val<'b>(&'b self, index: usize) -> Option<Leaf<'a>> {
         match self {
             PageNode::Page(p) => match p.page_type {
-                Page::TYPE_LEAF => p.leaf_elements().get(index).map(Data::from_leaf),
+                Page::TYPE_LEAF => p.leaf_elements().get(index).map(Leaf::from_leaf),
                 _ => panic!("INVALID PAGE TYPE FOR VAL"),
             },
             PageNode::Node(n) => match &n.borrow().data {

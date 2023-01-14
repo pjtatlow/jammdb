@@ -203,8 +203,7 @@ pub(crate) struct DBInner {
 impl DBInner {
     pub(crate) fn open(file: File, pagesize: u64, strict_mode: bool) -> Result<DBInner> {
         file.lock_exclusive()?;
-
-        let mmap = unsafe { Mmap::map(&file)? };
+        let mmap = mmap(&file)?;
         let mmap = Mutex::new(Arc::new(mmap));
         let db = DBInner {
             data: mmap,
@@ -235,7 +234,7 @@ impl DBInner {
         file.allocate(new_size)?;
         let _lock = self.mmap_lock.write()?;
         let mut data = self.data.lock()?;
-        let mmap = unsafe { Mmap::map(file).unwrap() };
+        let mmap = mmap(&file)?;
         *data = Arc::new(mmap);
         Ok(data.clone())
     }
@@ -402,4 +401,20 @@ mod tests {
         }
         DB::open(&random_file).unwrap();
     }
+}
+
+// Have different mmap functions for Unix and Windows
+#[cfg(unix)]
+fn mmap(file: &File) -> Result<Mmap> {
+    let mmap = unsafe { Mmap::map(file)? };
+    // On Unix we advice the OS that page access will be random.
+    mmap.advise(memmap2::Advice::Random)?;
+    Ok(mmap)
+}
+
+// On Windows there is no advice to give.
+#[cfg(windows)]
+fn mmap(file: &File) -> Result<Mmap> {
+    let mmap = unsafe { Mmap::map(file)? };
+    Ok(mmap)
 }

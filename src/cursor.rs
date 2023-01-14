@@ -6,7 +6,7 @@ use crate::{
     freelist::TxFreelist,
     page::PageID,
     page_node::PageNodeID,
-    BucketData, KVPair,
+    BucketName, KVPair,
 };
 
 /// An iterator over a bucket
@@ -79,6 +79,9 @@ impl<'b, 'tx> Cursor<'b, 'tx> {
     pub fn seek<T: AsRef<[u8]>>(&mut self, key: T) -> bool {
         self.next_called = false;
         let mut b = self.bucket.borrow_mut();
+        if b.deleted {
+            panic!("Cannot seek cursor on a deleted bucket.");
+        }
         let (exists, stack) = search(key.as_ref(), b.meta.root_page, &mut b);
         self.stack = stack;
         exists
@@ -86,12 +89,15 @@ impl<'b, 'tx> Cursor<'b, 'tx> {
 
     /// Returns the data at the cursor's current position.
     /// You can use this to get data after doing a [`seek`](#method.seek).
-    pub fn current<'a>(&'a self) -> Option<Data<'tx>> {
+    pub fn current<'a>(&'a self) -> Option<Data<'b, 'tx>> {
+        let b = self.bucket.borrow_mut();
+        if b.deleted {
+            panic!("Cannot get data from a deleted bucket.");
+        }
         match self.stack.last() {
             Some(e) => {
-                let b = self.bucket.borrow_mut();
                 let n = b.page_node(e.id);
-                n.val(e.index)
+                n.val(e.index).map(|data| data.into())
             }
             None => None,
         }
@@ -156,7 +162,7 @@ pub(crate) struct SearchPath {
 }
 
 impl<'b, 'tx> Iterator for Cursor<'b, 'tx> {
-    type Item = Data<'tx>;
+    type Item = Data<'b, 'tx>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.stack.is_empty() {
@@ -165,6 +171,9 @@ impl<'b, 'tx> Iterator for Cursor<'b, 'tx> {
             loop {
                 {
                     let b = self.bucket.borrow();
+                    if b.deleted {
+                        panic!("Cannot get data from a deleted bucket.");
+                    }
                     let elem = self.stack.last_mut().unwrap();
                     let page_node = b.page_node(elem.id);
                     if elem.index >= (page_node.len() - 1) {
@@ -192,13 +201,13 @@ pub struct Buckets<'b, 'tx> {
 }
 
 impl<'b, 'tx: 'b> Iterator for Buckets<'b, 'tx> {
-    type Item = (BucketData<'b>, Bucket<'b, 'tx>);
+    type Item = (BucketName<'b, 'tx>, Bucket<'b, 'tx>);
 
     fn next(&mut self) -> Option<Self::Item> {
         for data in self.c.by_ref() {
             if let Data::Bucket(bucket_data) = data {
                 let mut b = self.c.bucket.borrow_mut();
-                if let Ok(r) = b.get_bucket(bucket_data.name()) {
+                if let Ok(r) = b.get_bucket(&bucket_data) {
                     return Some((
                         bucket_data,
                         Bucket {
@@ -223,7 +232,7 @@ pub struct KVPairs<'b, 'tx> {
 }
 
 impl<'b, 'tx> Iterator for KVPairs<'b, 'tx> {
-    type Item = KVPair<'tx>;
+    type Item = KVPair<'b, 'tx>;
 
     fn next(&mut self) -> Option<Self::Item> {
         for data in self.c.by_ref() {
@@ -299,5 +308,29 @@ mod tests {
         }
 
         db.check()
+    }
+
+    #[test]
+    #[should_panic]
+    fn deleted_bucket_create_cursor() {
+        let random_file = RandomFile::new();
+        let db = DB::open(&random_file).unwrap();
+        let tx = db.tx(true).unwrap();
+        let b = tx.create_bucket("abc").unwrap();
+        tx.delete_bucket("abc").unwrap();
+
+        b.cursor();
+    }
+
+    #[test]
+    #[should_panic]
+    fn deleted_bucket_create_iterate() {
+        let random_file = RandomFile::new();
+        let db = DB::open(&random_file).unwrap();
+        let tx = db.tx(true).unwrap();
+        let b = tx.create_bucket("abc").unwrap();
+        let mut c = b.cursor();
+        tx.delete_bucket("abc").unwrap();
+        c.next();
     }
 }

@@ -2,9 +2,8 @@ use std::cell::RefCell;
 use std::mem::size_of;
 use std::rc::Rc;
 
-use crate::bucket::InnerBucket;
+use crate::bucket::{BucketMeta, InnerBucket, META_SIZE};
 use crate::bytes::Bytes;
-use crate::data::Data;
 use crate::errors::Result;
 
 use crate::freelist::TxFreelist;
@@ -71,7 +70,7 @@ impl<'n> Node<'n> {
             Page::TYPE_LEAF => {
                 let mut data = Vec::with_capacity(p.count as usize);
                 for leaf in p.leaf_elements() {
-                    data.push(Data::from_leaf(leaf));
+                    data.push(Leaf::from_leaf(leaf));
                 }
                 NodeData::Leaves(data)
             }
@@ -128,13 +127,13 @@ impl<'n> Node<'n> {
         }
     }
 
-    pub(crate) fn insert_data<'a>(&'a mut self, data: Data<'n>) {
+    pub(crate) fn insert_data<'a>(&'a mut self, leaf: Leaf<'n>) {
         match &mut self.data {
             NodeData::Branches(_) => panic!("CANNOT INSERT DATA INTO A BRANCH NODE"),
             NodeData::Leaves(leaves) => {
-                match leaves.binary_search_by_key(&data.key(), |d| d.key()) {
-                    Ok(i) => leaves[i] = data,
-                    Err(i) => leaves.insert(i, data),
+                match leaves.binary_search_by_key(&leaf.key(), |l| l.key()) {
+                    Ok(i) => leaves[i] = leaf,
+                    Err(i) => leaves.insert(i, leaf),
                 };
             }
         }
@@ -166,7 +165,7 @@ impl<'n> Node<'n> {
         }
     }
 
-    pub(crate) fn delete<'a>(&'a mut self, index: usize) -> Data<'n> {
+    pub(crate) fn delete<'a>(&'a mut self, index: usize) -> Leaf<'n> {
         match &mut self.data {
             NodeData::Branches(_) => panic!("CANNOT DELETE DATA FROM A BRANCH NODE"),
             NodeData::Leaves(leaves) => leaves.remove(index),
@@ -388,7 +387,7 @@ impl<'n> Node<'n> {
 
 pub(crate) enum NodeData<'a> {
     Branches(Vec<Branch<'a>>),
-    Leaves(Vec<Data<'a>>),
+    Leaves(Vec<Leaf<'a>>),
 }
 
 impl<'a> NodeData<'a> {
@@ -466,6 +465,64 @@ impl<'a> Branch<'a> {
 
     pub(crate) fn key_size(&self) -> usize {
         self.key.size()
+    }
+}
+
+#[derive(Clone)]
+pub(crate) enum Leaf<'a> {
+    Bucket(Bytes<'a>, BucketMeta),
+    Kv(Bytes<'a>, Bytes<'a>),
+}
+
+impl<'a> Leaf<'a> {
+    pub(crate) fn from_leaf<'b>(l: &'b LeafElement) -> Leaf<'a> {
+        match l.node_type {
+            Node::TYPE_DATA => Leaf::Kv(Bytes::Slice(l.key()), Bytes::Slice(l.value())),
+            Node::TYPE_BUCKET => Leaf::Bucket(Bytes::Slice(l.key()), l.value().into()),
+            _ => panic!("INVALID NODE TYPE"),
+        }
+    }
+
+    pub(crate) fn node_type(&self) -> NodeType {
+        match self {
+            Self::Bucket(_, _) => Node::TYPE_BUCKET,
+            Self::Kv(_, _) => Node::TYPE_DATA,
+        }
+    }
+
+    pub(crate) fn key_bytes<'b>(&'b self) -> Bytes<'a> {
+        match self {
+            Self::Bucket(name, _) => name.clone(),
+            Self::Kv(k, _) => k.clone(),
+        }
+    }
+
+    pub(crate) fn key(&self) -> &[u8] {
+        match self {
+            Self::Bucket(b, _) => b.as_ref(),
+            Self::Kv(k, _) => k.as_ref(),
+        }
+    }
+
+    pub(crate) fn value(&self) -> &[u8] {
+        match self {
+            Self::Bucket(_, meta) => meta.as_ref(),
+            Self::Kv(_, v) => v.as_ref(),
+        }
+    }
+
+    pub(crate) fn size(&self) -> usize {
+        match self {
+            Self::Bucket(b, _) => b.size() + META_SIZE,
+            Self::Kv(k, v) => k.size() + v.size(),
+        }
+    }
+
+    pub(crate) fn is_kv(&self) -> bool {
+        match self {
+            Self::Bucket(_, _) => false,
+            Self::Kv(_, _) => true,
+        }
     }
 }
 
@@ -549,9 +606,6 @@ mod test {
                     }
                 }
             }
-            // tx.commit()?;
-
-            // b.get("abc");
         }
         Ok(())
     }

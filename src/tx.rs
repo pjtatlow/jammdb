@@ -9,7 +9,7 @@ use std::{
 };
 
 use crate::{
-    bucket::{Bucket, InnerBucket},
+    bucket::{Bucket, BucketMeta, InnerBucket},
     bytes::ToBytes,
     cursor::Buckets,
     db::{DB, MIN_ALLOC_SIZE},
@@ -18,7 +18,6 @@ use crate::{
     meta::Meta,
     node::Node,
     page::{Page, PageID, Pages},
-    BucketData,
 };
 
 pub(crate) enum TxLock<'tx> {
@@ -407,9 +406,9 @@ impl<'tx> TxInner<'tx> {
                     for (i, leaf) in page.leaf_elements().iter().enumerate() {
                         match leaf.node_type {
                             Node::TYPE_BUCKET => {
-                                let bucket_data: BucketData = leaf.into();
+                                let meta: BucketMeta = leaf.value().into();
                                 // Push all nested bucket pages onto the queue for exploration
-                                page_stack.push(bucket_data.meta().root_page);
+                                page_stack.push(meta.root_page);
                             }
                             // Ignore data nodes since they don't point to more pages
                             Node::TYPE_DATA => (),
