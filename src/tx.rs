@@ -493,8 +493,10 @@ mod tests {
     use std::mem::size_of;
 
     use super::*;
-    use crate::db::{OpenOptions, DB};
-    use crate::testutil::RandomFile;
+    use crate::{
+        db::{OpenOptions, DB},
+        testutil::RandomFile,
+    };
 
     #[test]
     fn test_ro_txs() -> Result<()> {

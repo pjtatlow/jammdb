@@ -1,6 +1,4 @@
-use std::error::Error as StdError;
-use std::fmt;
-use std::sync::PoisonError;
+use std::{error::Error as StdError, fmt, sync::PoisonError};
 
 pub(crate) type Result<T> = std::result::Result<T, Error>;
 

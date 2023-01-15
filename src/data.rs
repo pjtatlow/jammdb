@@ -1,8 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::bytes::Bytes;
-use crate::node::Leaf;
-use crate::ToBytes;
+use crate::{bytes::Bytes, node::Leaf, ToBytes};
 
 /// Key / Value or Bucket Data
 ///

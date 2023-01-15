@@ -1,5 +1,3 @@
-use memmap2::Mmap;
-use page_size::get as get_page_size;
 use std::{
     fs::{File, OpenOptions as FileOpenOptions},
     io::Write,
@@ -7,9 +5,13 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 
-use crate::{bucket::BucketMeta, errors::Result, page::Page, tx::Tx};
-use crate::{freelist::Freelist, meta::Meta};
 use fs2::FileExt;
+use memmap2::Mmap;
+use page_size::get as get_page_size;
+
+use crate::{
+    bucket::BucketMeta, errors::Result, freelist::Freelist, meta::Meta, page::Page, tx::Tx,
+};
 
 const MAGIC_VALUE: u32 = 0x00AB_CDEF;
 const VERSION: u32 = 1;

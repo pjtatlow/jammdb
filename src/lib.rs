@@ -126,13 +126,14 @@ mod page;
 mod page_node;
 mod tx;
 
-pub use crate::bytes::ToBytes;
 pub use bucket::Bucket;
 pub use cursor::{Buckets, Cursor, KVPairs, ToBuckets, ToKVPairs};
 pub use data::*;
 pub use db::{OpenOptions, DB};
 pub use errors::*;
 pub use tx::Tx;
+
+pub use crate::bytes::ToBytes;
 
 #[cfg(test)]
 ///

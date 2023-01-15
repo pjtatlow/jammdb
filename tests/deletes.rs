@@ -1,6 +1,7 @@
+use std::collections::HashSet;
+
 use jammdb::{Error, OpenOptions};
 use rand::prelude::*;
-use std::collections::HashSet;
 
 mod common;
 
