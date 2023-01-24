@@ -992,9 +992,8 @@ impl From<&[u8]> for BucketMeta {
 #[cfg(test)]
 mod tests {
 
-    use crate::{testutil::RandomFile, DB};
-
     use super::*;
+    use crate::{testutil::RandomFile, DB};
 
     #[test]
     fn bytes() {

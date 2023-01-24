@@ -372,9 +372,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::db::DB;
-    use crate::errors::Result;
-    use crate::testutil::RandomFile;
+    use crate::{db::DB, errors::Result, testutil::RandomFile};
 
     #[test]
     fn test_iters() -> Result<()> {

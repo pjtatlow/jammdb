@@ -1,12 +1,16 @@
-use std::alloc::Layout;
-use std::collections::{BTreeMap, BTreeSet};
-use std::mem::size_of;
-use std::ptr::NonNull;
+use std::{
+    alloc::Layout,
+    collections::{BTreeMap, BTreeSet},
+    mem::size_of,
+    ptr::NonNull,
+};
 
 use bumpalo::Bump;
 
-use crate::meta::Meta;
-use crate::page::{Page, PageID};
+use crate::{
+    meta::Meta,
+    page::{Page, PageID},
+};
 
 pub(crate) struct TxFreelist {
     pub(crate) meta: Meta,
