@@ -62,10 +62,45 @@ impl PartialEq for Error {
             (Error::KeyValueMissing, Error::KeyValueMissing) => true,
             (Error::IncompatibleValue, Error::IncompatibleValue) => true,
             (Error::ReadOnlyTx, Error::ReadOnlyTx) => true,
-            (Error::Io(s1), Error::Io(s2)) => format!("{}", s1) == format!("{}", s2),
             (Error::Sync(s1), Error::Sync(s2)) => s1 == s2,
             (Error::InvalidDB(s1), Error::InvalidDB(s2)) => s1 == s2,
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_display() {
+        assert_eq!(format!("{}", Error::BucketExists), "Bucket already exists");
+        assert_eq!(format!("{}", Error::BucketMissing), "Bucket does not exist");
+        assert_eq!(
+            format!("{}", Error::KeyValueMissing),
+            "Key / Value pair does not exist"
+        );
+        assert_eq!(
+            format!("{}", Error::IncompatibleValue),
+            "Value not compatible"
+        );
+        assert_eq!(
+            format!("{}", Error::ReadOnlyTx),
+            "Cannot write in a read-only transaction"
+        );
+
+        assert_eq!(
+            format!(
+                "{}",
+                Error::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "oopsie"))
+            ),
+            "IO Error: oopsie"
+        );
+        assert_eq!(format!("{}", Error::Sync("abc")), "Sync Error: abc");
+        assert_eq!(
+            format!("{}", Error::InvalidDB(String::from("uh oh"))),
+            "Invalid DB: uh oh"
+        );
     }
 }
