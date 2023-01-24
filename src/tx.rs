@@ -11,13 +11,14 @@ use std::{
 use crate::{
     bucket::{Bucket, BucketMeta, InnerBucket},
     bytes::ToBytes,
-    cursor::Buckets,
+    cursor::ToBuckets,
     db::{DB, MIN_ALLOC_SIZE},
     errors::{Error, Result},
     freelist::TxFreelist,
     meta::Meta,
     node::Node,
     page::{Page, PageID, Pages},
+    BucketName,
 };
 
 pub(crate) enum TxLock<'tx> {
@@ -238,7 +239,7 @@ impl<'tx> Tx<'tx> {
     }
 
     /// Iterator over the root level buckets
-    pub fn buckets<'b>(&'b self) -> Buckets<'b, 'tx> {
+    pub fn buckets<'b>(&'b self) -> impl Iterator<Item = (BucketName<'b, 'tx>, Bucket<'b, 'tx>)> {
         let tx = self.inner.borrow();
         let bucket = Bucket {
             inner: tx.root.clone(),
@@ -246,7 +247,7 @@ impl<'tx> Tx<'tx> {
             writable: tx.lock.writable(),
             _phantom: PhantomData,
         };
-        Buckets { c: bucket.cursor() }
+        bucket.cursor().to_buckets()
     }
 
     /// Writes the changes made in the writeable transaction to the underlying file.

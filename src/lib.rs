@@ -128,7 +128,7 @@ mod tx;
 
 pub use crate::bytes::ToBytes;
 pub use bucket::Bucket;
-pub use cursor::{Buckets, Cursor, KVPairs};
+pub use cursor::{Buckets, Cursor, KVPairs, ToBuckets, ToKVPairs};
 pub use data::*;
 pub use db::{OpenOptions, DB};
 pub use errors::*;
