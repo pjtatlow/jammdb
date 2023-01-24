@@ -317,7 +317,7 @@ impl<'tx> TxInner<'tx> {
                 }
             }
         }
-        if self.db.inner.strict_mode {
+        if self.db.inner.flags.strict_mode {
             self.check()?;
         }
         if let TxLock::Rw(file) = &mut self.lock {
