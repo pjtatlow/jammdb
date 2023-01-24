@@ -2,18 +2,20 @@ use std::{
     cell::{RefCell, RefMut},
     collections::HashMap,
     marker::PhantomData,
+    ops::RangeBounds,
     rc::Rc,
 };
 
 use crate::{
     bytes::{Bytes, ToBytes},
-    cursor::{search, Buckets, Cursor, KVPairs},
+    cursor::{search, Cursor, Range, ToBuckets, ToKVPairs},
     data::{Data, KVPair},
     errors::{Error, Result},
     freelist::TxFreelist,
     node::{Leaf, Node, NodeData, NodeID},
     page::{Page, PageID, Pages},
     page_node::{PageNode, PageNodeID},
+    BucketName,
 };
 
 /// A collection of data
@@ -424,13 +426,34 @@ impl<'b, 'tx> Bucket<'b, 'tx> {
     }
 
     /// Iterator over the sub-buckets in this bucket.
-    pub fn buckets<'a>(&'a self) -> Buckets<'b, 'tx> {
-        Buckets { c: self.cursor() }
+    pub fn buckets<'a>(&'a self) -> impl Iterator<Item = (BucketName<'b, 'tx>, Bucket<'b, 'tx>)> {
+        self.cursor().to_buckets()
     }
 
     /// Iterator over the key / value pairs in this bucket.
-    pub fn kv_pairs<'a>(&'a self) -> KVPairs<'b, 'tx> {
-        KVPairs { c: self.cursor() }
+    pub fn kv_pairs<'a>(&'a self) -> impl Iterator<Item = KVPair<'b, 'tx>> {
+        self.cursor().to_kv_pairs()
+    }
+
+    pub fn range<'a, R>(&'a self, r: R) -> Range<'a, 'b, 'tx, R>
+    where
+        R: RangeBounds<&'a [u8]>,
+    {
+        Range {
+            c: self.cursor(),
+            bounds: r,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+// and we'll implement IntoIterator
+impl<'b, 'tx> IntoIterator for Bucket<'b, 'tx> {
+    type Item = Data<'b, 'tx>;
+    type IntoIter = Cursor<'b, 'tx>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.cursor()
     }
 }
 
@@ -1032,10 +1055,10 @@ mod tests {
             b.cursor();
         })
         deleted_bucket_buckets: ("Cannot create cursor from a deleted bucket.", |b: &Bucket| {
-            b.buckets();
+            let _ = b.buckets();
         })
         deleted_bucket_kv_pairs: ("Cannot create cursor from a deleted bucket.", |b: &Bucket| {
-            b.kv_pairs();
+            let _ = b.kv_pairs();
         })
     }
 
@@ -1121,5 +1144,56 @@ mod tests {
             }
             assert!(b.get_kv("abc").is_none())
         })
+    }
+
+    #[test]
+    fn test_range() -> Result<()> {
+        let random_file = RandomFile::new();
+        let db = DB::open(&random_file)?;
+        {
+            let tx = db.tx(true)?;
+            let b = tx.create_bucket("abc")?;
+            b.put("a", "1")?;
+            b.put("b", "2")?;
+            b.put("c", "3")?;
+            b.put("d", "4")?;
+            b.put("e", "5")?;
+            b.put("f", "6")?;
+            tx.commit()?;
+        }
+        macro_rules! iter_test {
+            ($range:expr, $keys:expr) => {
+                let tx = db.tx(false)?;
+                let b = tx.get_bucket("abc")?;
+                let mut bucket_iter = b.range($range);
+                for k in $keys {
+                    let k = k.as_bytes();
+                    let data = bucket_iter.next();
+                    assert!(data.is_some());
+                    assert!(data.unwrap().key() == k);
+                }
+                assert!(bucket_iter.next().is_none());
+            };
+        }
+        let a = "a".as_bytes();
+        let aa = "aa".as_bytes();
+        let b = "b".as_bytes();
+        let d = "d".as_bytes();
+        let e = "e".as_bytes();
+
+        iter_test!(a..e, ["a", "b", "c", "d"]);
+        iter_test!(aa..e, ["b", "c", "d"]);
+        iter_test!(b..e, ["b", "c", "d"]);
+        iter_test!(a..=d, ["a", "b", "c", "d"]);
+        iter_test!(b..=e, ["b", "c", "d", "e"]);
+        iter_test!(b.., ["b", "c", "d", "e", "f"]);
+        iter_test!(a.., ["a", "b", "c", "d", "e", "f"]);
+        iter_test!(d..e, ["d"]);
+        iter_test!(d..=e, ["d", "e"]);
+        iter_test!(..=e, ["a", "b", "c", "d", "e"]);
+        iter_test!(..e, ["a", "b", "c", "d"]);
+        iter_test!(.., ["a", "b", "c", "d", "e", "f"]);
+
+        Ok(())
     }
 }

@@ -1,4 +1,4 @@
-.PHONEY: coverage, test-32-bit, docs, docs-open
+.PHONEY: coverage, test-32-bit, docs, docs-open, codecov-check
 
 coverage-html:
 	mkdir -p target/coverage/html
@@ -23,3 +23,6 @@ docs-open:
 
 test-32-bit:
 	docker run --rm -v "$(PWD)":/usr/src/myapp -w /usr/src/myapp i386/rust:1.42.0 cargo test
+
+codecov-check:
+	curl -X POST --data-binary @codecov.yml https://codecov.io/validate
