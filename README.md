@@ -64,7 +64,7 @@ fn main() -> Result<(), Error> {
     // open the existing database file
     let db = DB::open("my-database.db")?;
     // open a read-only transaction to get the data
-    let tx = db.tx(true)?;
+    let tx = db.tx(false)?;
     // get the bucket we created in the last transaction
     let names_bucket = tx.get_bucket("names")?;
     // get the key/ value pair we inserted into the bucket
@@ -112,7 +112,7 @@ fn main() -> Result<(), Error> {
     // open the existing database file
     let db = DB::open("my-database.db")?;
     // open a read-only transaction to get the data
-    let tx = db.tx(true)?;
+    let tx = db.tx(false)?;
     // get the bucket we created in the last transaction
     let users_bucket = tx.get_bucket("users")?;
     // get the key / value pair we inserted into the bucket
