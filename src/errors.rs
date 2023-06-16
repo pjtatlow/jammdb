@@ -21,6 +21,8 @@ pub enum Error {
     Sync(&'static str),
     /// Error returned when the DB is found to be in an invalid state
     InvalidDB(String),
+    /// Errors that can occur during allocation
+    Alloc(std::alloc::LayoutError),
 }
 
 impl StdError for Error {}
@@ -36,6 +38,7 @@ impl fmt::Display for Error {
             Error::Io(e) => write!(f, "IO Error: {}", e),
             Error::Sync(s) => write!(f, "Sync Error: {}", s),
             Error::InvalidDB(s) => write!(f, "Invalid DB: {}", s),
+            Error::Alloc(e) => write!(f, "Allocation error: {}", e),
         }
     }
 }
@@ -43,6 +46,12 @@ impl fmt::Display for Error {
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Error {
         Error::Io(err)
+    }
+}
+
+impl From<std::alloc::LayoutError> for Error {
+    fn from(err: std::alloc::LayoutError) -> Error {
+        Error::Alloc(err)
     }
 }
 

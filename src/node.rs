@@ -361,18 +361,18 @@ impl<'n> Node<'n> {
             return Ok(());
         }
         self.spilled = true;
-        let page = self.allocate(tx_freelist);
+        let page = self.allocate(tx_freelist)?;
         page.write_node(self, self.num_pages)
     }
 
     // Free our old page (if we have one) and get a new page for ourselves.
-    fn allocate<'a>(&'a mut self, tx_freelist: &'a mut TxFreelist) -> &'n mut Page {
+    fn allocate<'a>(&'a mut self, tx_freelist: &'a mut TxFreelist) -> Result<&'n mut Page> {
         self.free_page(tx_freelist);
         let size = self.size();
-        let page = tx_freelist.allocate(size);
+        let page = tx_freelist.allocate(size)?;
         self.page_id = page.id;
         self.num_pages = page.overflow + 1;
-        page
+        Ok(page)
     }
 
     // Give our current page back to the freelist (if we have one)

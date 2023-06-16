@@ -10,6 +10,7 @@ use bumpalo::Bump;
 use crate::{
     meta::Meta,
     page::{Page, PageID},
+    Result,
 };
 
 pub(crate) struct TxFreelist {
@@ -36,7 +37,7 @@ impl<'a> TxFreelist {
         }
     }
 
-    pub(crate) fn allocate<'b>(&'b mut self, bytes: u64) -> &'a mut Page {
+    pub(crate) fn allocate<'b>(&'b mut self, bytes: u64) -> Result<&'a mut Page> {
         assert!(
             bytes >= (size_of::<Page>() as u64),
             "cannot allocate {} bytes, minimum is {}, {}",
@@ -57,16 +58,17 @@ impl<'a> TxFreelist {
                 page_id
             }
         };
+
         let ptr = self
             .arena
-            .alloc_layout(Layout::array::<u8>(bytes as usize).unwrap());
+            .alloc_layout(Layout::array::<u8>(bytes as usize)?.align_to(8)?);
 
         let page = unsafe { &mut *(ptr.as_ptr() as *mut Page) };
         page.id = page_id;
         page.overflow = num_pages - 1;
         self.pages.insert(page_id, (ptr, bytes as usize));
 
-        page
+        Ok(page)
     }
 }
 
@@ -290,21 +292,21 @@ mod tests {
         assert_eq!(freelist.inner.pages().len(), 0);
         assert_eq!(tx.meta.num_pages, 4);
         // allocate one page worth of bytes
-        let page = freelist.allocate(1024);
+        let page = freelist.allocate(1024)?;
         assert!(page.id == 4);
         assert!(page.overflow == 0);
         // allocate a half page worth of bytes
-        let page = freelist.allocate(512);
+        let page = freelist.allocate(512)?;
         assert!(page.id == 5);
         assert!(page.overflow == 0);
 
         // allocate ten pages worth of bytes
-        let page = freelist.allocate(10240);
+        let page = freelist.allocate(10240)?;
         assert!(page.id == 6);
         assert!(page.overflow == 9);
 
         // allocate a non pagesize number of bytes
-        let page = freelist.allocate(1234);
+        let page = freelist.allocate(1234)?;
         assert!(page.id == 16);
         assert!(page.overflow == 1);
 
@@ -330,21 +332,21 @@ mod tests {
         freelist.meta.num_pages = 99;
 
         // allocate one page worth of bytes (should come from freelist)
-        let page = freelist.allocate(1024);
+        let page = freelist.allocate(1024)?;
         assert!(page.id == 10);
         assert!(page.overflow == 0);
         // allocate a half page worth of bytes (should come from freelist)
-        let page = freelist.allocate(512);
+        let page = freelist.allocate(512)?;
         assert!(page.id == 11);
         assert!(page.overflow == 0);
 
         // allocate three-ish pages worth of bytes (should come from freelist)
-        let page = freelist.allocate(3000);
+        let page = freelist.allocate(3000)?;
         assert!(page.id == 13);
         assert!(page.overflow == 2);
 
         // allocate a small number of bytes
-        let page = freelist.allocate(100);
+        let page = freelist.allocate(100)?;
         assert!(page.id == 99);
         assert!(page.overflow == 0);
         Ok(())
