@@ -9,38 +9,46 @@
 [![License](https://img.shields.io/crates/l/jammdb?style=flat-square)](https://crates.io/crates/jammdb)
 [![Dependency Status](https://deps.rs/repo/github/pjtatlow/jammdb/status.svg?style=flat-square)](https://deps.rs/repo/github/pjtatlow/jammdb)
 
+`jammdb` is an embedded, single-file database that allows you to store key /
+value pairs as bytes.
 
-`jammdb` is an embedded, single-file database that allows you to store key / value pairs as bytes.
+It started life as a Rust port of
+[Ben Johnson's](https://twitter.com/benbjohnson)
+[BoltDB](https://github.com/boltdb/bolt), which was inspired by
+[Howard Chu's](https://twitter.com/hyc_symas) [LMDB](http://symas.com/mdb/), so
+please check out both of these awesome projects!
 
-It started life as a Rust port of [Ben Johnson's](https://twitter.com/benbjohnson) [BoltDB](https://github.com/boltdb/bolt),
-which was inspired by [Howard Chu's](https://twitter.com/hyc_symas) [LMDB](http://symas.com/mdb/),
-so please check out both of these awesome projects!
-
-`jammdb` offers
-[ACID](https://en.wikipedia.org/wiki/ACID) compliance,
+`jammdb` offers [ACID](https://en.wikipedia.org/wiki/ACID) compliance,
 [serializable](https://en.wikipedia.org/wiki/Serializability) and
-[isolated](https://en.wikipedia.org/wiki/Isolation_(database_systems)) transactions,
-with multiple lock-free readers and a single concurrent writer. The data is organized in a
-[single level](https://en.wikipedia.org/wiki/Single-level_store) [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree)
-so random and sequential reads are very fast. The underlying file is [memory mapped](https://en.wikipedia.org/wiki/Memory-mapped_file),
-so reads require no additional memory allocation.
+[isolated](https://en.wikipedia.org/wiki/Isolation_(database_systems))
+transactions, with multiple lock-free readers and a single concurrent writer.
+The data is organized in a
+[single level](https://en.wikipedia.org/wiki/Single-level_store)
+[B+ tree](https://en.wikipedia.org/wiki/B%2B_tree) so random and sequential
+reads are very fast. The underlying file is
+[memory mapped](https://en.wikipedia.org/wiki/Memory-mapped_file), so reads
+require no additional memory allocation.
 
 ## Supported platforms
+
 `jammdb` is continuously cross-compiled and tested on the following platforms:
-  * `x86_64-unknown-linux-gnu` (Linux)
-  * `i686-unknown-linux-gnu`
-  * `x86_64-unknown-linux-musl` (Linux MUSL)
-  * `x86_64-apple-darwin` (OSX)
-  * `x86_64-pc-windows-msvc` (Windows)
-  * `i686-pc-windows-msvc`
-  * `x86_64-pc-windows-gnu`
-  * `i686-pc-windows-gnu`
+
+- `x86_64-unknown-linux-gnu` (Linux)
+- `i686-unknown-linux-gnu`
+- `x86_64-unknown-linux-musl` (Linux MUSL)
+- `x86_64-apple-darwin` (OSX)
+- `x86_64-pc-windows-msvc` (Windows)
+- `i686-pc-windows-msvc`
+- `x86_64-pc-windows-gnu`
+- `i686-pc-windows-gnu`
 
 ## Examples
 
-Here are a couple of simple examples to get you started, but you should check out the docs for more details.
+Here are a couple of simple examples to get you started, but you should check
+out the docs for more details.
 
 ### Simple put and get
+
 ```rust
 use jammdb::{DB, Data, Error};
 
@@ -78,6 +86,7 @@ fn main() -> Result<(), Error> {
 ```
 
 ### Storing structs
+
 ```rust
 use jammdb::{DB, Data, Error};
 use serde::{Deserialize, Serialize};
@@ -129,6 +138,11 @@ fn main() -> Result<(), Error> {
 }
 ```
 
+## MSRV
+
+Currently `1.60`
+
 ## License
 
-Available under both the [Apache License](LICENSE-APACHE) or the [MIT license](LICENSE-MIT).
+Available under both the [Apache License](LICENSE-APACHE) or the
+[MIT license](LICENSE-MIT).
