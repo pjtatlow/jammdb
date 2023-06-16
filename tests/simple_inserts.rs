@@ -78,7 +78,7 @@ fn test_insert(mut values: Vec<u64>) -> Result<(), Error> {
 
 fn check_data(b: &Bucket, len: u64, repeats: usize) {
     let mut count: u64 = 0;
-    for (i, data) in b.cursor().into_iter().enumerate() {
+    for (i, data) in b.cursor().enumerate() {
         let i = i as u64;
         count += 1;
         match data {
