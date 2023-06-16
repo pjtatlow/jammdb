@@ -986,10 +986,12 @@ impl AsRef<[u8]> for BucketMeta {
 impl From<&[u8]> for BucketMeta {
     fn from(value: &[u8]) -> Self {
         const SIZE: usize = size_of::<BucketMeta>();
-        let mut buf = [0_u8; SIZE];
+        let mut buf = [0_u8; SIZE + 8];
+        let ptr = buf.as_mut_ptr();
         unsafe {
-            std::ptr::copy(value.as_ptr(), buf.as_mut_ptr(), SIZE);
-            *(buf.as_ptr() as *const BucketMeta)
+            let ptr = ptr.add(ptr.align_offset(8));
+            std::ptr::copy(value.as_ptr(), ptr, SIZE);
+            *(ptr as *const BucketMeta)
         }
     }
 }
