@@ -2,7 +2,7 @@ use std::{
     cell::{RefCell, RefMut},
     collections::HashMap,
     marker::PhantomData,
-    mem::size_of,
+    mem::{align_of, size_of},
     ops::RangeBounds,
     rc::Rc,
 };
@@ -984,12 +984,19 @@ impl AsRef<[u8]> for BucketMeta {
 }
 
 impl From<&[u8]> for BucketMeta {
+    // Because we need the pointer to match BucketMeta's alignment,
+    // we allocate a buffer on the stack that will definitely have
+    // space for the BucketMeta. Then we choose a point in that buffer
+    // that is aligned property, copy the data from value over,
+    // and cast our BucketMeta from there.
     fn from(value: &[u8]) -> Self {
         const SIZE: usize = size_of::<BucketMeta>();
-        let mut buf = [0_u8; SIZE + 8];
+        const ALIGN: usize = align_of::<BucketMeta>();
+        debug_assert_eq!(SIZE, value.len());
+        let mut buf = [0_u8; SIZE + ALIGN];
         let ptr = buf.as_mut_ptr();
         unsafe {
-            let ptr = ptr.add(ptr.align_offset(8));
+            let ptr = ptr.add(ptr.align_offset(ALIGN));
             std::ptr::copy(value.as_ptr(), ptr, SIZE);
             *(ptr as *const BucketMeta)
         }

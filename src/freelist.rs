@@ -61,7 +61,7 @@ impl<'a> TxFreelist {
 
         let ptr = self
             .arena
-            .alloc_layout(Layout::array::<u8>(bytes as usize)?.align_to(8)?);
+            .alloc_layout(Layout::from_size_align(bytes as usize, 8)?);
 
         let page = unsafe { &mut *(ptr.as_ptr() as *mut Page) };
         page.id = page_id;
