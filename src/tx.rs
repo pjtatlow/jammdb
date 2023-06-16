@@ -284,7 +284,7 @@ impl<'tx> TxInner<'tx> {
             {
                 freelist.free(self.meta.freelist_page, self.num_freelist_pages);
                 let freelist_size = freelist.inner.size();
-                let page = freelist.allocate(freelist_size);
+                let page = freelist.allocate(freelist_size)?;
                 self.meta.freelist_page = page.id;
                 let free_page_ids = freelist.inner.pages();
                 page.page_type = Page::TYPE_FREELIST;
@@ -583,29 +583,29 @@ mod tests {
             assert_eq!(freelist.inner.pages(), vec![2, 3, 4, 5, 6]);
             // allocate some pages from the freelist
             assert_eq!(freelist.meta.num_pages, 10);
-            let page = freelist.allocate(size_of::<Page>() as u64);
+            let page = freelist.allocate(size_of::<Page>() as u64)?;
             assert!(page.id == 2);
             assert!(page.overflow == 0);
 
-            let page = freelist.allocate(size_of::<Page>() as u64);
+            let page = freelist.allocate(size_of::<Page>() as u64)?;
             assert!(page.id == 3);
             assert!(page.overflow == 0);
 
-            let page = freelist.allocate(size_of::<Page>() as u64);
+            let page = freelist.allocate(size_of::<Page>() as u64)?;
             assert!(page.id == 4);
             assert!(page.overflow == 0);
 
-            let page = freelist.allocate(size_of::<Page>() as u64);
+            let page = freelist.allocate(size_of::<Page>() as u64)?;
             assert!(page.id == 5);
             assert!(page.overflow == 0);
 
-            let page = freelist.allocate(size_of::<Page>() as u64);
+            let page = freelist.allocate(size_of::<Page>() as u64)?;
             assert!(page.id == 6);
             assert!(page.overflow == 0);
 
             // freelist should be empty so make sure the page is new
             assert_eq!(freelist.meta.num_pages, 10);
-            let page = freelist.allocate(size_of::<Page>() as u64);
+            let page = freelist.allocate(size_of::<Page>() as u64)?;
             assert!(page.id == 10);
             assert!(page.overflow == 0);
             assert_eq!(freelist.meta.num_pages, 11);

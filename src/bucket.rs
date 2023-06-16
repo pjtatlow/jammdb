@@ -2,6 +2,7 @@ use std::{
     cell::{RefCell, RefMut},
     collections::HashMap,
     marker::PhantomData,
+    mem::size_of,
     ops::RangeBounds,
     rc::Rc,
 };
@@ -984,8 +985,12 @@ impl AsRef<[u8]> for BucketMeta {
 
 impl From<&[u8]> for BucketMeta {
     fn from(value: &[u8]) -> Self {
-        let ptr = &value[0] as *const u8;
-        unsafe { *(ptr as *const BucketMeta) }
+        const SIZE: usize = size_of::<BucketMeta>();
+        let mut buf = [0_u8; SIZE];
+        unsafe {
+            std::ptr::copy(value.as_ptr(), buf.as_mut_ptr(), SIZE);
+            *(buf.as_ptr() as *const BucketMeta)
+        }
     }
 }
 
