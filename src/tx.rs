@@ -326,7 +326,7 @@ impl<'tx> TxInner<'tx> {
                 let mut buf = vec![0; self.db.inner.pagesize as usize];
 
                 #[allow(clippy::cast_ptr_alignment)]
-                let mut page = unsafe { &mut *(&mut buf[0] as *mut u8 as *mut Page) };
+                let page = unsafe { &mut *(&mut buf[0] as *mut u8 as *mut Page) };
                 let meta_page_id = u64::from(self.meta.meta_page == 0);
                 page.id = meta_page_id;
                 page.page_type = Page::TYPE_META;
@@ -361,8 +361,7 @@ impl<'tx> TxInner<'tx> {
         let mut page_stack = Vec::new();
         page_stack.push(self.meta.root.root_page);
         page_stack.push(self.meta.freelist_page);
-        while !page_stack.is_empty() {
-            let page_id = page_stack.pop().unwrap();
+        while let Some(page_id) = page_stack.pop() {
             // Make sure this page hasn't already been used
             if !unused_pages.remove(&page_id) {
                 return Err(Error::InvalidDB(format!(
