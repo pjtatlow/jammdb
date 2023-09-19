@@ -692,8 +692,7 @@ impl<'b> InnerBucket<'b> {
             // create a stack of pages to free and keep going until
             // we've freed every reachable page starting from this bucket's root page
             remaining_pages.push(b.meta.root_page);
-            while !remaining_pages.is_empty() {
-                let page_id = remaining_pages.pop().unwrap();
+            while let Some(page_id) = remaining_pages.pop() {
                 let page = self.pages.page(page_id);
                 let num_pages = page.overflow + 1;
                 match page.page_type {
