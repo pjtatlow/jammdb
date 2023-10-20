@@ -7,7 +7,7 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 
-use fs2::FileExt;
+use fs4::FileExt;
 use memmap2::Mmap;
 use page_size::get as get_page_size;
 
