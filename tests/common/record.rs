@@ -416,12 +416,7 @@ pub fn log_playback(name: &str) -> Result<(), Error> {
     Ok(())
 }
 
-fn mutate_buckets<'tx, F>(
-    tx: &Tx<'tx>,
-    root: &mut FakeNode,
-    path: &Vec<Bytes>,
-    f: F,
-) -> Result<(), Error>
+fn mutate_buckets<F>(tx: &Tx, root: &mut FakeNode, path: &Vec<Bytes>, f: F) -> Result<(), Error>
 where
     F: Fn(&Bucket, &mut BTreeMap<Bytes, FakeNode>) -> Result<(), Error>,
 {

@@ -9,7 +9,7 @@ use memmap2::Mmap;
 
 use crate::{
     errors::Result,
-    meta::Meta,
+    meta::{Meta, OldMeta},
     node::{Node, NodeData, NodeType},
 };
 
@@ -66,17 +66,42 @@ impl Page {
     }
 
     pub(crate) fn meta(&self) -> &Meta {
-        assert_eq!(self.page_type, Page::TYPE_META);
+        assert_eq!(
+            self.page_type,
+            Page::TYPE_META,
+            "Did not find meta page, found {}",
+            self.page_type
+        );
         unsafe { &*(&self.ptr as *const u64 as *const Meta) }
     }
 
+    pub(crate) fn old_meta(&self) -> &OldMeta {
+        assert_eq!(
+            self.page_type,
+            Page::TYPE_META,
+            "Did not find meta page, found {}",
+            self.page_type
+        );
+        unsafe { &*(&self.ptr as *const u64 as *const OldMeta) }
+    }
+
     pub(crate) fn meta_mut(&mut self) -> &mut Meta {
-        assert_eq!(self.page_type, Page::TYPE_META);
+        assert_eq!(
+            self.page_type,
+            Page::TYPE_META,
+            "Did not find meta page, found {}",
+            self.page_type
+        );
         unsafe { &mut *(&mut self.ptr as *mut u64 as *mut Meta) }
     }
 
     pub(crate) fn freelist(&self) -> &[PageID] {
-        assert_eq!(self.page_type, Page::TYPE_FREELIST);
+        assert_eq!(
+            self.page_type,
+            Page::TYPE_FREELIST,
+            "Did not find freelist page, found {}",
+            self.page_type
+        );
         unsafe {
             let start = &self.ptr as *const u64 as *const PageID;
             from_raw_parts(start, self.count as usize)
@@ -84,7 +109,12 @@ impl Page {
     }
 
     pub(crate) fn freelist_mut(&mut self) -> &mut [PageID] {
-        assert_eq!(self.page_type, Page::TYPE_FREELIST);
+        assert_eq!(
+            self.page_type,
+            Page::TYPE_FREELIST,
+            "Did not find freelist page, found {}",
+            self.page_type
+        );
         unsafe {
             let start = &self.ptr as *const u64 as *mut PageID;
             from_raw_parts_mut(start, self.count as usize)
@@ -92,7 +122,12 @@ impl Page {
     }
 
     pub(crate) fn leaf_elements(&self) -> &[LeafElement] {
-        assert_eq!(self.page_type, Page::TYPE_LEAF);
+        assert_eq!(
+            self.page_type,
+            Page::TYPE_LEAF,
+            "Did not find leaf page, found {}",
+            self.page_type
+        );
         unsafe {
             let start = &self.ptr as *const u64 as *const LeafElement;
             from_raw_parts(start, self.count as usize)
@@ -100,7 +135,12 @@ impl Page {
     }
 
     pub(crate) fn branch_elements(&self) -> &[BranchElement] {
-        assert_eq!(self.page_type, Page::TYPE_BRANCH);
+        assert_eq!(
+            self.page_type,
+            Page::TYPE_BRANCH,
+            "Did not find branch page, found {}",
+            self.page_type
+        );
         unsafe {
             let start = &self.ptr as *const u64 as *const BranchElement;
             from_raw_parts(start, self.count as usize)
@@ -108,7 +148,12 @@ impl Page {
     }
 
     pub(crate) fn leaf_elements_mut(&mut self) -> &mut [LeafElement] {
-        assert_eq!(self.page_type, Page::TYPE_LEAF);
+        assert_eq!(
+            self.page_type,
+            Page::TYPE_LEAF,
+            "Did not find leaf page, found {}",
+            self.page_type
+        );
         unsafe {
             let start = &self.ptr as *const u64 as *const LeafElement as *mut LeafElement;
             from_raw_parts_mut(start, self.count as usize)
@@ -116,7 +161,12 @@ impl Page {
     }
 
     pub(crate) fn branch_elements_mut(&mut self) -> &mut [BranchElement] {
-        assert_eq!(self.page_type, Page::TYPE_BRANCH);
+        assert_eq!(
+            self.page_type,
+            Page::TYPE_BRANCH,
+            "Did not find branch page, found {}",
+            self.page_type
+        );
         unsafe {
             let start = &self.ptr as *const u64 as *const BranchElement as *mut BranchElement;
             from_raw_parts_mut(start, self.count as usize)
