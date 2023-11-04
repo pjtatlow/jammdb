@@ -40,39 +40,6 @@ impl Meta {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_meta() {
-        let mut meta = Meta {
-            meta_page: 1,
-            magic: 1_234_567_890,
-            version: 987_654_321,
-            pagesize: 4096,
-            root: BucketMeta {
-                root_page: 2,
-                next_int: 2020,
-            },
-            num_pages: 13,
-            freelist_page: 3,
-            tx_id: 8,
-            hash: 64,
-        };
-
-        assert!(!meta.valid());
-        meta.hash = meta.hash_self();
-        assert_eq!(meta.hash, meta.hash_self());
-
-        meta.tx_id = 88;
-        assert_ne!(meta.hash, meta.hash_self());
-
-        meta.hash = meta.hash_self();
-        assert_eq!(meta.hash, meta.hash_self());
-    }
-}
-
 // OldMeta is the metadata format for versions <= 0.10
 // For now we check all databases for either metadata version,
 // but always write the new format.
@@ -143,5 +110,66 @@ impl From<&OldMeta> for Meta {
 
         m.hash = m.hash_self();
         m
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_meta() {
+        let mut meta = Meta {
+            meta_page: 1,
+            magic: 1_234_567_890,
+            version: 987_654_321,
+            pagesize: 4096,
+            root: BucketMeta {
+                root_page: 2,
+                next_int: 2020,
+            },
+            num_pages: 13,
+            freelist_page: 3,
+            tx_id: 8,
+            hash: 64,
+        };
+
+        assert!(!meta.valid());
+        meta.hash = meta.hash_self();
+        assert_eq!(meta.hash, meta.hash_self());
+
+        meta.tx_id = 88;
+        assert_ne!(meta.hash, meta.hash_self());
+
+        meta.hash = meta.hash_self();
+        assert_eq!(meta.hash, meta.hash_self());
+    }
+
+    #[test]
+    fn test_old_meta() {
+        let mut meta = OldMeta {
+            meta_page: 1,
+            magic: 1_234_567_890,
+            version: 987_654_321,
+            pagesize: 4096,
+            root: BucketMeta {
+                root_page: 2,
+                next_int: 2020,
+            },
+            num_pages: 13,
+            freelist_page: 3,
+            tx_id: 8,
+            hash: [255; 32],
+        };
+
+        assert!(!meta.valid());
+        meta.hash = meta.hash_self();
+        assert_eq!(meta.hash, meta.hash_self());
+
+        meta.tx_id = 88;
+        assert_ne!(meta.hash, meta.hash_self());
+
+        meta.hash = meta.hash_self();
+        assert_eq!(meta.hash, meta.hash_self());
     }
 }
