@@ -7,7 +7,7 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 
-use fs2::FileExt;
+use fs4::FileExt;
 use memmap2::Mmap;
 use page_size::get as get_page_size;
 
@@ -283,56 +283,65 @@ impl DBInner {
 
     pub(crate) fn meta(&self) -> Result<Meta> {
         let data = self.data.lock()?;
-        let meta1 = Page::from_buf(&data, 0, self.pagesize).meta();
 
-        // Double check that we have the right pagesize before we read the second page.
-        if meta1.valid() && meta1.pagesize != self.pagesize {
-            assert_eq!(
-                meta1.pagesize, self.pagesize,
-                "Invalid pagesize from meta1 {}. Expected {}.",
-                meta1.pagesize, self.pagesize
-            );
+        macro_rules! check_meta {
+            ($func:ident) => {{
+                let meta1 = Page::from_buf(&data, 0, self.pagesize).$func();
+                // Double check that we have the right pagesize before we read the second page.
+                if meta1.valid() && meta1.pagesize != self.pagesize {
+                    assert_eq!(
+                        meta1.pagesize, self.pagesize,
+                        "Invalid pagesize from meta1 {}. Expected {}.",
+                        meta1.pagesize, self.pagesize
+                    );
+                }
+                let meta2 = Page::from_buf(&data, 1, self.pagesize).$func();
+                match (meta1.valid(), meta2.valid()) {
+                    (true, true) => {
+                        assert_eq!(
+                            meta1.pagesize, self.pagesize,
+                            "Invalid pagesize from meta1 {}. Expected {}.",
+                            meta1.pagesize, self.pagesize
+                        );
+                        assert_eq!(
+                            meta2.pagesize, self.pagesize,
+                            "Invalid pagesize from meta2 {}. Expected {}.",
+                            meta2.pagesize, self.pagesize
+                        );
+                        if meta1.tx_id > meta2.tx_id {
+                            Some(meta1)
+                        } else {
+                            Some(meta2)
+                        }
+                    }
+                    (true, false) => {
+                        assert_eq!(
+                            meta1.pagesize, self.pagesize,
+                            "Invalid pagesize from meta1 {}. Expected {}.",
+                            meta1.pagesize, self.pagesize
+                        );
+                        Some(meta1)
+                    }
+                    (false, true) => {
+                        assert_eq!(
+                            meta2.pagesize, self.pagesize,
+                            "Invalid pagesize from meta2 {}. Expected {}.",
+                            meta2.pagesize, self.pagesize
+                        );
+                        Some(meta2)
+                    }
+                    (false, false) => None,
+                }
+            }};
         }
 
-        let meta2 = Page::from_buf(&data, 1, self.pagesize).meta();
-        let meta = match (meta1.valid(), meta2.valid()) {
-            (true, true) => {
-                assert_eq!(
-                    meta1.pagesize, self.pagesize,
-                    "Invalid pagesize from meta1 {}. Expected {}.",
-                    meta1.pagesize, self.pagesize
-                );
-                assert_eq!(
-                    meta2.pagesize, self.pagesize,
-                    "Invalid pagesize from meta2 {}. Expected {}.",
-                    meta2.pagesize, self.pagesize
-                );
-                if meta1.tx_id > meta2.tx_id {
-                    meta1
-                } else {
-                    meta2
-                }
-            }
-            (true, false) => {
-                assert_eq!(
-                    meta1.pagesize, self.pagesize,
-                    "Invalid pagesize from meta1 {}. Expected {}.",
-                    meta1.pagesize, self.pagesize
-                );
-                meta1
-            }
-            (false, true) => {
-                assert_eq!(
-                    meta2.pagesize, self.pagesize,
-                    "Invalid pagesize from meta2 {}. Expected {}.",
-                    meta2.pagesize, self.pagesize
-                );
-                meta2
-            }
-            (false, false) => panic!("NO VALID META PAGES"),
-        };
-
-        Ok(meta.clone())
+        if let Some(meta) = check_meta!(meta) {
+            Ok(meta.clone())
+        } else if let Some(old_meta) = check_meta!(old_meta) {
+            Ok(old_meta.into())
+        } else {
+            panic!("NO VALID META PAGES");
+        }
     }
 }
 

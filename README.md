@@ -140,7 +140,7 @@ fn main() -> Result<(), Error> {
 
 ## MSRV
 
-Currently `1.60`
+Currently `1.63`
 
 ## License
 

@@ -1,12 +1,8 @@
-use std::io::Write;
+use std::hash::Hasher;
 
-// use std::mem::size_of;
-use bytes::BufMut;
-use sha3::{Digest, Sha3_256};
+use fnv::FnvHasher;
 
 use crate::{bucket::BucketMeta, page::PageID};
-
-// const META_SIZE: usize = size_of::<Meta>();
 
 #[repr(C)]
 #[derive(Debug, Clone)]
@@ -19,10 +15,54 @@ pub(crate) struct Meta {
     pub(crate) num_pages: PageID,
     pub(crate) freelist_page: PageID,
     pub(crate) tx_id: u64,
-    pub(crate) hash: [u8; 32],
+    pub(crate) hash: u64,
 }
 
 impl Meta {
+    pub(crate) fn valid(&self) -> bool {
+        self.hash == self.hash_self()
+    }
+
+    pub(crate) fn hash_self(&self) -> u64 {
+        let mut hasher = FnvHasher::default();
+
+        hasher.write(&self.meta_page.to_be_bytes());
+        hasher.write(&self.magic.to_be_bytes());
+        hasher.write(&self.version.to_be_bytes());
+        hasher.write(&self.pagesize.to_be_bytes());
+        hasher.write(&self.root.root_page.to_be_bytes());
+        hasher.write(&self.root.next_int.to_be_bytes());
+        hasher.write(&self.num_pages.to_be_bytes());
+        hasher.write(&self.freelist_page.to_be_bytes());
+        hasher.write(&self.tx_id.to_be_bytes());
+
+        hasher.finish()
+    }
+}
+
+// OldMeta is the metadata format for versions <= 0.10
+// For now we check all databases for either metadata version,
+// but always write the new format.
+use std::io::Write;
+
+use bytes::BufMut;
+use sha3::{Digest, Sha3_256};
+
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub(crate) struct OldMeta {
+    pub(crate) meta_page: u32,
+    pub(crate) magic: u32,
+    pub(crate) version: u32,
+    pub(crate) pagesize: u64,
+    pub(crate) root: BucketMeta,
+    pub(crate) num_pages: PageID,
+    pub(crate) freelist_page: PageID,
+    pub(crate) tx_id: u64,
+    pub(crate) hash: [u8; 32],
+}
+
+impl OldMeta {
     pub(crate) fn valid(&self) -> bool {
         self.hash == self.hash_self()
     }
@@ -54,6 +94,25 @@ impl Meta {
     }
 }
 
+impl From<&OldMeta> for Meta {
+    fn from(val: &OldMeta) -> Self {
+        let mut m = Meta {
+            meta_page: val.meta_page,
+            magic: val.magic,
+            version: val.version,
+            pagesize: val.pagesize,
+            root: val.root,
+            num_pages: val.num_pages,
+            freelist_page: val.freelist_page,
+            tx_id: val.tx_id,
+            hash: 0,
+        };
+
+        m.hash = m.hash_self();
+        m
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,20 +131,45 @@ mod tests {
             num_pages: 13,
             freelist_page: 3,
             tx_id: 8,
-            hash: [0; 32],
+            hash: 64,
         };
 
         assert!(!meta.valid());
         meta.hash = meta.hash_self();
-        assert!(meta.valid());
         assert_eq!(meta.hash, meta.hash_self());
-        // modify the last property before the hash
-        // to change the hash
+
         meta.tx_id = 88;
         assert_ne!(meta.hash, meta.hash_self());
-        // reset hash and make sure it is still valid
+
         meta.hash = meta.hash_self();
-        assert!(meta.valid());
+        assert_eq!(meta.hash, meta.hash_self());
+    }
+
+    #[test]
+    fn test_old_meta() {
+        let mut meta = OldMeta {
+            meta_page: 1,
+            magic: 1_234_567_890,
+            version: 987_654_321,
+            pagesize: 4096,
+            root: BucketMeta {
+                root_page: 2,
+                next_int: 2020,
+            },
+            num_pages: 13,
+            freelist_page: 3,
+            tx_id: 8,
+            hash: [255; 32],
+        };
+
+        assert!(!meta.valid());
+        meta.hash = meta.hash_self();
+        assert_eq!(meta.hash, meta.hash_self());
+
+        meta.tx_id = 88;
+        assert_ne!(meta.hash, meta.hash_self());
+
+        meta.hash = meta.hash_self();
         assert_eq!(meta.hash, meta.hash_self());
     }
 }

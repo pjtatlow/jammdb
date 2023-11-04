@@ -1029,6 +1029,7 @@ mod tests {
                 let tx = db.tx(true).unwrap();
                 let b = tx.create_bucket("abc").unwrap();
                 tx.delete_bucket("abc").unwrap();
+                #[allow(clippy::redundant_closure_call)]
                 $value(&b);
     		}
     	)*
@@ -1089,6 +1090,7 @@ mod tests {
                 }
                 let tx = db.tx($rw)?;
                 let b = tx.get_bucket("abc")?;
+                #[allow(clippy::redundant_closure_call)]
                 $value(&b);
                 Ok(())
     		}
